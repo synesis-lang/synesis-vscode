@@ -27,7 +27,7 @@
         },
         {
           "name": "keyword.control.field.synesis",
-          "match": "(?i)\\b(FIELD|TYPE|SCOPE|RELATIONS|ARITY|VALUES|FORMAT|REQUIRED|OPTIONAL|FORBIDDEN|BUNDLE)\\b"
+          "match": "(?i)\\b(FIELD|TYPE|SCOPE|RELATIONS|ARITY|VALUES|FORMAT|REQUIRED|OPTIONAL|FORBIDDEN|BUNDLE|GUIDELINES)\\b"
         },
         {
           "name": "keyword.control.type.synesis",

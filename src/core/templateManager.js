@@ -165,7 +165,8 @@ class TemplateManager {
                 scope: fieldDef.scope,
                 relations: fieldDef.relations || null,
                 arity: fieldDef.arity || null,
-                values: fieldDef.values || null
+                values: fieldDef.values || null,
+                guidelines: fieldDef.guidelines || null
             };
         }
 

@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.11] - 2026-03-06
+
+### Added
+- `syntaxes/synesis.tmLanguage.json`: keyword `GUIDELINES` adicionado ao grupo
+  `keyword.control.field.synesis`, aplicando syntax highlighting ao bloco
+  `GUIDELINES...END GUIDELINES` dentro de `FIELD...END FIELD`.
+- `src/core/templateManager.js`: campo `guidelines` extraído de `fieldDef` e
+  incluído no field registry via `buildFieldRegistry()`, tornando o conteúdo
+  das guidelines disponível para consumidores da extension.
+
 ## [0.5.10] - 2026-02-06
 
 ### Fixed
