@@ -4,6 +4,7 @@
   "scopeName": "source.synesis",
   "patterns": [
     {"include": "#comments"},
+    {"include": "#guidelines_block"},
     {"include": "#keywords"},
     {"include": "#references"},
     {"include": "#blocks"},
@@ -66,6 +67,7 @@
           },
           "patterns": [
             {"include": "#comments"},
+            {"include": "#guidelines_block"},
             {"include": "#fields"}
           ]
         },
@@ -83,6 +85,7 @@
           },
           "patterns": [
             {"include": "#comments"},
+            {"include": "#guidelines_block"},
             {"include": "#fields"},
             {"include": "#chains"}
           ]
@@ -101,6 +104,7 @@
           },
           "patterns": [
             {"include": "#comments"},
+            {"include": "#guidelines_block"},
             {"include": "#fields"}
           ]
         },
@@ -118,6 +122,7 @@
           },
           "patterns": [
             {"include": "#comments"},
+            {"include": "#guidelines_block"},
             {"include": "#keywords"},
             {"include": "#fields"}
           ]
@@ -129,7 +134,7 @@
         {
           "name": "meta.field.chain.synesis",
           "begin": "^\\s*(chain|chains)\\s*:",
-          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b)",
+          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b|\\s*GUIDELINES\\b)",
           "beginCaptures": {
             "1": {"name": "entity.name.tag.field.synesis"}
           },
@@ -140,7 +145,7 @@
         {
           "name": "meta.field.code.synesis",
           "begin": "^\\s*(code|codes)\\s*:",
-          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b)",
+          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b|\\s*GUIDELINES\\b)",
           "beginCaptures": {
             "1": {"name": "entity.name.tag.field.synesis"}
           },
@@ -158,7 +163,7 @@
         {
           "name": "meta.field.text.synesis",
           "begin": "^\\s*(text|quote|note|description|method|epistemic_model)\\s*:",
-          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b)",
+          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b|\\s*GUIDELINES\\b)",
           "beginCaptures": {
             "1": {"name": "entity.name.tag.field.synesis"}
           },
@@ -172,7 +177,7 @@
         {
           "name": "meta.field.generic.synesis",
           "begin": "^\\s*([\\p{L}_][\\p{L}\\p{N}._-]*)\\s*:",
-          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b)",
+          "end": "^(?=\\s*[\\p{L}\\p{N}._-]+\\s*:|\\s*END\\b|\\s*SOURCE\\b|\\s*ITEM\\b|\\s*ONTOLOGY\\b|\\s*FIELD\\b|\\s*PROJECT\\b|\\s*TEMPLATE\\b|\\s*GUIDELINES\\b)",
           "beginCaptures": {
             "1": {"name": "entity.name.tag.field.synesis"}
           },
@@ -206,6 +211,35 @@
             "2": {"name": "keyword.operator.arrow.synesis"},
             "3": {"name": "variable.other.code.synesis"}
           }
+        }
+      ]
+    },
+    "guidelines_block": {
+      "patterns": [
+        {
+          "name": "meta.block.guidelines.synesis",
+          "begin": "(?i)^\\s*(GUIDELINES)\\s*(?:#.*)?\\r?$",
+          "end": "(?i)^\\s*(END)\\s+(GUIDELINES)\\b",
+          "beginCaptures": {
+            "1": {"name": "keyword.control.field.synesis"}
+          },
+          "endCaptures": {
+            "1": {"name": "keyword.control.field.synesis"},
+            "2": {"name": "keyword.control.field.synesis"}
+          },
+          "patterns": [
+            {"include": "#guidelines_content"}
+          ]
+        }
+      ]
+    },
+    "guidelines_content": {
+      "patterns": [
+        {"include": "#comments"},
+        {
+          "comment": "Consume entire line — prevents any sub-pattern (field, keyword, chain) from matching inside GUIDELINES",
+          "name": "string.unquoted.guidelines.synesis",
+          "match": "^.+$"
         }
       ]
     },

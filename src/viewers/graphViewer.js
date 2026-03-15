@@ -3,7 +3,7 @@
  *
  * Proposito:
  *     Exibe um grafo Mermaid com relacoes de CHAIN para uma referencia.
- *     Usa DataService para obter mermaidCode (LSP ou regex local).
+ *     Usa DataService para obter mermaidCode via LSP.
  *
  * Componentes principais:
  *     - showGraph: Fluxo principal de exibicao
@@ -11,17 +11,15 @@
  *
  * Dependencias criticas:
  *     - DataService: LSP-only access for mermaidCode
- *     - SynesisParser: Fallback local para extracao de bibref
  */
 
 const vscode = require('vscode');
-const SynesisParser = require('../parsers/synesisParser');
 
 class GraphViewer {
-    constructor(dataService) {
+    constructor(dataService, extensionUri) {
         this.dataService = dataService;
+        this.extensionUri = extensionUri || null;
         this.panel = null;
-        this.parser = new SynesisParser();
     }
 
     async showGraph() {
@@ -62,13 +60,17 @@ class GraphViewer {
         if (this.panel) {
             this.panel.reveal(vscode.ViewColumn.Beside);
         } else {
+            const localResourceRoots = this.extensionUri
+                ? [vscode.Uri.joinPath(this.extensionUri, 'media')]
+                : [];
             this.panel = vscode.window.createWebviewPanel(
                 'graphViewer',
                 `Graph: ${reference}`,
                 vscode.ViewColumn.Beside,
                 {
                     enableScripts: true,
-                    retainContextWhenHidden: true
+                    retainContextWhenHidden: true,
+                    localResourceRoots
                 }
             );
 
@@ -82,14 +84,32 @@ class GraphViewer {
     }
 
     getWebviewContent(reference, mermaidCode) {
+        const nonce = getNonce();
+        const mermaidSrc = this._getMermaidUri();
+        // When the local asset is available, lock script-src to the nonce only.
+        // When falling back to CDN, allow the specific CDN host as well.
+        const scriptSrc = mermaidSrc
+            ? `'nonce-${nonce}'`
+            : `'nonce-${nonce}' https://cdn.jsdelivr.net`;
+        const mermaidScriptTag = mermaidSrc
+            ? `<script nonce="${nonce}" src="${mermaidSrc}"></script>`
+            : `<script nonce="${nonce}" src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>`;
+        const csp = [
+            `default-src 'none'`,
+            `script-src ${scriptSrc}`,
+            `style-src 'unsafe-inline'`,
+            `img-src data: blob:`,
+            `font-src 'self'`,
+        ].join('; ');
+
         return `<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
+    <meta http-equiv="Content-Security-Policy" content="${csp}">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Graph: ${escapeHtml(reference)}</title>
-    <link href="https://rsms.me/inter/inter.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    ${mermaidScriptTag}
     <style>
         :root {
             --bg: #f8fafc;
@@ -113,7 +133,7 @@ class GraphViewer {
         }
 
         body {
-            font-family: 'Inter', system-ui, sans-serif;
+            font-family: system-ui, sans-serif;
             background: var(--bg);
             color: var(--text);
             height: 100vh;
@@ -159,7 +179,7 @@ class GraphViewer {
             padding: 6px 12px;
             border-radius: 6px;
             cursor: pointer;
-            font-family: 'Inter', system-ui, sans-serif;
+            font-family: system-ui, sans-serif;
             font-size: 13px;
             font-weight: 500;
             transition: all 0.2s ease;
@@ -339,7 +359,7 @@ ${mermaidCode}
                 startOnLoad: false,
                 theme: 'base',
                 themeVariables: {
-                    fontFamily: 'Inter, system-ui',
+                    fontFamily: 'system-ui, sans-serif',
                     fontSize: '14px',
                     primaryColor: '#dbeafe',
                     primaryBorderColor: '#3b82f6',
@@ -384,23 +404,28 @@ ${mermaidCode}
 </html>`;
     }
 
+    _getMermaidUri() {
+        if (!this.extensionUri || !this.panel) {
+            return null;
+        }
+        try {
+            const mermaidPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'mermaid.min.js');
+            return this.panel.webview.asWebviewUri(mermaidPath).toString();
+        } catch (_) {
+            return null;
+        }
+    }
+
     async _findBibref(document, position) {
         const lspReady = Boolean(this.dataService && this.dataService.lspClient && this.dataService.lspClient.isReady());
         console.log('GraphViewer._findBibref: LSP ready?', lspReady);
 
-        let bibref = null;
-
-        if (lspReady) {
-            bibref = await this._findBibrefViaLsp(document, position);
-            if (bibref) {
-                return bibref;
-            }
-            console.warn('GraphViewer._findBibref: LSP did not return a bibref, falling back to local parsing');
-        } else {
-            console.warn('GraphViewer._findBibref: LSP not ready, falling back to local parsing');
+        if (!lspReady) {
+            vscode.window.showWarningMessage('Synesis LSP is not ready. Cannot resolve reference.');
+            return null;
         }
 
-        return this._findBibrefLocal(document, position);
+        return this._findBibrefViaLsp(document, position);
     }
 
     async _findBibrefViaLsp(document, position) {
@@ -426,40 +451,15 @@ ${mermaidCode}
         }
     }
 
-    _findBibrefLocal(document, position) {
-        try {
-            const text = document.getText();
-            const filePath = document.uri.fsPath || '';
-            const offset = document.offsetAt(position);
+}
 
-            const items = this.parser.parseItems(text, filePath);
-            const item = items.find(entry => offset >= entry.startOffset && offset <= entry.endOffset);
-            if (item && item.bibref) {
-                console.log('GraphViewer._findBibrefLocal: Found bibref in ITEM block:', item.bibref);
-                return item.bibref;
-            }
-
-            const sources = this.parser.parseSourceBlocks(text, filePath);
-            const source = sources.find(entry => offset >= entry.startOffset && offset <= entry.endOffset);
-            if (source && source.bibref) {
-                console.log('GraphViewer._findBibrefLocal: Found bibref in SOURCE block:', source.bibref);
-                return source.bibref;
-            }
-
-            const lineText = document.lineAt(position.line).text;
-            const match = lineText.match(/@[\w._-]+/);
-            const inlineBibref = match ? match[0] : null;
-            if (inlineBibref) {
-                console.log('GraphViewer._findBibrefLocal: Found inline bibref:', inlineBibref);
-            } else {
-                console.warn('GraphViewer._findBibrefLocal: No bibref found via local parsing');
-            }
-            return inlineBibref;
-        } catch (error) {
-            console.warn('GraphViewer._findBibrefLocal: Failed to parse document:', error.message);
-            return null;
-        }
+function getNonce() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let nonce = '';
+    for (let i = 0; i < 32; i++) {
+        nonce += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    return nonce;
 }
 
 function escapeHtml(value) {

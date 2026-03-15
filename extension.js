@@ -163,8 +163,8 @@ function activate(context) {
         showCollapseAll: true
     });
 
-    const abstractViewer = new AbstractViewer(workspaceScanner, templateManager);
-    const graphViewer = new GraphViewer(dataService);
+    const abstractViewer = new AbstractViewer(workspaceScanner, templateManager, dataService);
+    const graphViewer = new GraphViewer(dataService, context.extensionUri);
 
     // Register commands
     const refreshAllExplorers = () => {
@@ -175,14 +175,58 @@ function activate(context) {
         ontologyAnnotationExplorer.refresh();
     };
 
-    // Debounced refresh for file watchers to avoid cascade
-    let refreshDebounceTimer;
-    const debouncedRefresh = (refreshFn, delay = 300) => {
-        clearTimeout(refreshDebounceTimer);
-        refreshDebounceTimer = setTimeout(refreshFn, delay);
+    // Debounce factory — each caller gets an independent timer (no cross-cancellation)
+    class Debouncer {
+        constructor(delay = 300) {
+            this.delay = delay;
+            this.timer = null;
+        }
+        run(fn) {
+            clearTimeout(this.timer);
+            this.timer = setTimeout(fn, this.delay);
+        }
+        cancel() {
+            clearTimeout(this.timer);
+        }
+    }
+
+    const editorChangeDebouncer = new Debouncer(200);
+    // (lspLoadDebouncer managed separately via lspLoadTimer — kept as-is)
+
+    // Selective refresh by file extension — avoids unnecessary LSP calls
+    // .syn  → references, codes, ontology annotations (not topology/relations)
+    // .syno → ontology topics + annotations
+    // .synt → all (template change affects everything)
+    // .bib  → references only
+    // .synp → all (project change affects everything)
+    const FILE_REFRESH_MAP = {
+        '.syn':  ['reference', 'code', 'ontologyAnnotation'],
+        '.syno': ['ontology', 'ontologyAnnotation'],
+        '.synt': ['all'],
+        '.bib':  ['reference'],
+        '.synp': ['all'],
     };
 
-    const runLspLoadProject = async ({ showProgress, showErrorMessage, workspaceRoot }) => {
+    const refreshExplorersForFileType = (ext) => {
+        const targets = FILE_REFRESH_MAP[ext] || ['all'];
+        if (targets.includes('all')) {
+            refreshAllExplorers();
+            return;
+        }
+        if (targets.includes('reference')) referenceExplorer.refresh();
+        if (targets.includes('code')) codeExplorer.refresh();
+        if (targets.includes('relation')) relationExplorer.refresh();
+        if (targets.includes('ontology')) ontologyExplorer.refresh();
+        if (targets.includes('ontologyAnnotation')) ontologyAnnotationExplorer.refresh();
+    };
+
+    // debouncedRefresh kept for backward-compat with onDidChangeActiveTextEditor usage below
+    const debouncedRefresh = (refreshFn, delay = 300) => {
+        editorChangeDebouncer.delay = delay;
+        editorChangeDebouncer.run(refreshFn);
+    };
+
+    const runLspLoadProject = async ({ showProgress, showErrorMessage, workspaceRoot, fileExt }) => {
         if (!lspClient || !lspClient.isReady()) {
             setLspStatus('error');
             if (showErrorMessage) {
@@ -202,6 +246,8 @@ function activate(context) {
 
         setLspStatus('loading');
         try {
+            // Invalidate cache before loading so explorer refreshes fetch fresh data.
+            lspClient.invalidateCache();
             const loadRequest = () => lspClient.sendRequest('synesis/loadProject', { workspaceRoot: resolvedRoot });
             const result = showProgress
                 ? await vscode.window.withProgress(
@@ -214,8 +260,14 @@ function activate(context) {
                 : await loadRequest();
 
             if (result && result.success) {
-                setLspStatus('ready', result.stats);
-                refreshAllExplorers();
+                setLspStatus('ready', result.stats, result.lsp_version, result.compiler_version);
+                // Selective refresh: only update explorers affected by the saved file type.
+                // Manual load (no fileExt) refreshes all explorers.
+                if (fileExt) {
+                    refreshExplorersForFileType(fileExt);
+                } else {
+                    refreshAllExplorers();
+                }
             } else {
                 setLspStatus('error');
                 if (showErrorMessage) {
@@ -245,7 +297,8 @@ function activate(context) {
         setTimeout(() => refreshAllExplorers(), 500);
     }
 
-    const scheduleLspLoadProject = (document) => {
+    let pendingFileExt = null;
+    const scheduleLspLoadProject = (document, fileExt) => {
         if (!lspClient || !lspClient.isReady()) {
             return;
         }
@@ -253,11 +306,27 @@ function activate(context) {
             clearTimeout(lspLoadTimer);
         }
         pendingLspWorkspaceRoot = resolveWorkspaceRoot(document) || pendingLspWorkspaceRoot;
+        // If multiple saves arrive before the debounce fires, keep the broadest scope:
+        // 'all' always wins over a specific type, otherwise use the latest file's type.
+        if (fileExt && pendingFileExt) {
+            const prevTargets = FILE_REFRESH_MAP[pendingFileExt] || ['all'];
+            const newTargets  = FILE_REFRESH_MAP[fileExt] || ['all'];
+            if (prevTargets.includes('all') || newTargets.includes('all')) {
+                pendingFileExt = null; // null → refreshAllExplorers
+            } else {
+                pendingFileExt = fileExt;
+            }
+        } else {
+            pendingFileExt = fileExt || null;
+        }
         lspLoadTimer = setTimeout(() => {
+            const ext = pendingFileExt;
+            pendingFileExt = null;
             runLspLoadProject({
                 showProgress: false,
                 showErrorMessage: false,
-                workspaceRoot: pendingLspWorkspaceRoot
+                workspaceRoot: pendingLspWorkspaceRoot,
+                fileExt: ext
             });
         }, 1000);
     };
@@ -549,12 +618,12 @@ function activate(context) {
         })
     );
 
-    // File save handler - triggers LSP reload which will refresh all explorers
+    // File save handler - triggers LSP reload with selective explorer refresh
     context.subscriptions.push(
         vscode.workspace.onDidSaveTextDocument(document => {
             const ext = path.extname(document.uri.fsPath || '').toLowerCase();
             if (ext === '.syn' || ext === '.syno' || ext === '.synp' || ext === '.synt' || ext === '.bib') {
-                scheduleLspLoadProject(document);
+                scheduleLspLoadProject(document, ext);
             }
         })
     );
@@ -825,7 +894,7 @@ async function startLspClient(client, pythonPath, lspArgs = []) {
     }
 }
 
-function setLspStatus(state, stats) {
+function setLspStatus(state, stats, lspVersion, compilerVersion) {
     if (!lspStatusItem) {
         return;
     }
@@ -836,10 +905,14 @@ function setLspStatus(state, stats) {
         ? ` ${lspCommandArgs.join(' ')}`
         : '';
 
+    const versionSuffix = (lspVersion || compilerVersion)
+        ? ` — LSP v${lspVersion || '?'} · synesis v${compilerVersion || '?'}`
+        : '';
+
     if (commandPath) {
-        lspStatusItem.tooltip = `Synesis LSP: ${commandPath}${commandArgs}`;
+        lspStatusItem.tooltip = `Synesis LSP: ${commandPath}${commandArgs}${versionSuffix}`;
     } else {
-        lspStatusItem.tooltip = 'Synesis LSP';
+        lspStatusItem.tooltip = `Synesis LSP${versionSuffix}`;
     }
 
     if (state === 'disabled') {
@@ -868,7 +941,10 @@ function setLspStatus(state, stats) {
 
     if (state === 'ready') {
         if (stats && typeof stats.source_count === 'number' && typeof stats.item_count === 'number') {
-            lspStatusItem.text = `$(check) Ready (${stats.source_count} sources, ${stats.item_count} items)`;
+            const verLabel = (lspVersion && compilerVersion)
+                ? ` [LSP v${lspVersion} · synesis v${compilerVersion}]`
+                : '';
+            lspStatusItem.text = `$(check) ${stats.source_count} fontes, ${stats.item_count} itens${verLabel}`;
         } else {
             lspStatusItem.text = `$(check) LSP Ready (${commandLabel})`;
         }
@@ -883,31 +959,42 @@ function validateLspCapabilities() {
     }
 
     const caps = lspClient.client.initializeResult.capabilities;
-    const missing = [];
+
+    // Required capabilities — extension is degraded without these
+    const required = [
+        { key: 'hoverProvider',         label: 'Hover' },
+        { key: 'definitionProvider',    label: 'Go to Definition' },
+        { key: 'documentSymbolProvider',label: 'Document Symbols (required for Graph Viewer)' },
+        { key: 'renameProvider',        label: 'Rename' },
+        { key: 'completionProvider',    label: 'Completion' },
+    ];
+
+    // Optional capabilities — informational only
+    const optional = [
+        { key: 'signatureHelpProvider',   label: 'Signature Help' },
+        { key: 'referencesProvider',      label: 'Find References' },
+        { key: 'codeActionProvider',      label: 'Code Actions (Quick Fix)' },
+        { key: 'semanticTokensProvider',  label: 'Semantic Tokens' },
+        { key: 'inlayHintProvider',       label: 'Inlay Hints' },
+        { key: 'documentHighlightProvider', label: 'Document Highlight' },
+    ];
+
+    const summary = {};
+    required.forEach(c => { summary[c.label] = !!caps[c.key]; });
+    optional.forEach(c => { summary[c.label] = !!caps[c.key]; });
 
     console.log('=== LSP Capabilities Validation ===');
-    console.log('Capabilities:', JSON.stringify({
-        hover: !!caps.hoverProvider,
-        definition: !!caps.definitionProvider,
-        documentSymbol: !!caps.documentSymbolProvider,
-        rename: !!caps.renameProvider,
-        completion: !!caps.completionProvider
-    }, null, 2));
+    console.log('Capabilities:', JSON.stringify(summary, null, 2));
 
-    if (!caps.hoverProvider) {
-        missing.push('Hover');
+    const missing = required.filter(c => !caps[c.key]).map(c => c.label);
+    const available = optional.filter(c => !!caps[c.key]).map(c => c.label);
+    const unavailable = optional.filter(c => !caps[c.key]).map(c => c.label);
+
+    if (available.length > 0) {
+        console.log(`Optional features available: ${available.join(', ')}`);
     }
-    if (!caps.definitionProvider) {
-        missing.push('Go to Definition');
-    }
-    if (!caps.documentSymbolProvider) {
-        missing.push('Document Symbols (required for Graph Viewer)');
-    }
-    if (!caps.renameProvider) {
-        missing.push('Rename');
-    }
-    if (!caps.completionProvider) {
-        missing.push('Completion');
+    if (unavailable.length > 0) {
+        console.log(`Optional features not provided by this LSP version: ${unavailable.join(', ')}`);
     }
 
     if (missing.length > 0) {
@@ -921,9 +1008,7 @@ function validateLspCapabilities() {
             }
         });
     } else {
-        const successMessage = '✓ LSP capabilities validated successfully: Hover, Definition, DocumentSymbol, Rename, Completion';
-        console.log(successMessage);
-        console.log('All LSP features should work correctly.');
+        console.log(`✓ All required LSP capabilities validated: ${required.map(c => c.label).join(', ')}`);
     }
 }
 

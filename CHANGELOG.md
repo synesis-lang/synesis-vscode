@@ -5,6 +5,139 @@ All notable changes to the Synesis Explorer extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.24] - 2026-03-15
+
+### Fixed
+- **`WORD:` dentro de GUIDELINES ainda destacado como campo** (`syntaxes/synesis.tmLanguage.json`)
+  - `match: ".+"` em `guidelines_content` usa `^.+$` para ancorar explicitamente ao início da linha.
+  - `begin` do `guidelines_block` relaxado de `\s*$` para `\s*(?:#.*)?\r?$` — aceita comentários inline após `GUIDELINES` e trata CRLF (Windows) corretamente, evitando falha silenciosa na ativação do bloco.
+
+## [0.5.23] - 2026-03-15
+
+### Fixed
+- **Conteúdo de GUIDELINES ainda destacado como keywords/chains/campos** (`syntaxes/synesis.tmLanguage.json`)
+  - Defesa em profundidade: `#guidelines_block` agora incluído em **todos** os contextos (root, SOURCE, ITEM, ONTOLOGY, FIELD) — antes só estava em `meta.block.field.synesis`.
+  - Novo `#guidelines_content` com `match: ".+"` consome cada linha inteira como `string.unquoted.guidelines.synesis`, impedindo qualquer sub-padrão (keywords, chains, fields) de casar dentro do bloco.
+  - Cor do conteúdo: itálico neutro (`#a9b1d6` dark / `#6e6a86` light) — texto instrucional, não código.
+
+## [0.5.22] - 2026-03-15
+
+### Fixed
+- **Conteúdo de GUIDELINES destacado como campos/keywords** (`syntaxes/synesis.tmLanguage.json`)
+  - Campos com `begin`/`end` (`DESCRIPTION:`, `SCOPE:`, etc.) não tinham `GUIDELINES` como delimitador de fim — o campo anterior "vazava" e consumia as linhas do bloco GUIDELINES como valor de campo.
+  - Fix: adicionado `|\\s*GUIDELINES\\b` ao padrão `end` de todos os quatro tipos de campo (`chain`, `code`, `text`, `generic`), forçando o campo a terminar quando a gramática encontra a linha `GUIDELINES`.
+
+## [0.5.21] - 2026-03-15
+
+### Added
+- **Semantic Tokens ativados nos temas** (`themes/synesis-dark-theme.json`, `themes/synesis-light-theme.json`)
+  - `"semanticHighlighting": true` em ambos os temas — o editor agora aplica colorização AST do LSP.
+  - `"semanticTokenColors"` mapeando os 6 tipos do servidor (keyword, variable, property, string, enumMember, namespace) às novas paletas.
+  - TextMate `tokenColors` atualizado para manter consistência como fallback.
+- **Novas paletas de cores** ("Midnight Scholar" dark / "Parchment & Ink" light)
+  - Dark: fundo `#1a1b26` (azul-noite); keywords `#bb9af7` (rosa-magenta); @bibrefs `#e0af68` (dourado); campos `#7dcfff` (azul-celeste); valores `#9ece6a` (verde-salvia); códigos `#2ac3de` (turquesa); relações `#f7768e` (coral).
+  - Light: fundo `#faf4ed` (pergaminho); keywords `#8839ef` (púrpura-real); @bibrefs `#df8e1d` (âmbar); campos `#1e66f5` (azul-tinta); valores `#40a02b` (verde-floresta); códigos `#179299` (teal); relações `#d20f39` (vermelho).
+- **semanticTokenScopes** em `package.json` — mapeia token types LSP para escopos TextMate, garantindo compatibilidade com temas de terceiros (Dark+, Monokai, etc.).
+- **Configurações de feature toggle** (`package.json`)
+  - `synesisExplorer.diagnostics.enabled` — habilita/desabilita squiggles de diagnóstico.
+  - `synesisExplorer.inlayHints.enabled` — habilita/desabilita hints inline "(Author, Year)".
+  - `synesisExplorer.semanticHighlighting.enabled` — habilita/desabilita colorização AST.
+  - `synesisExplorer.completion.autoImportCodes` — inclui/exclui códigos ontológicos nas sugestões de autocomplete.
+- **Middleware LSP** (`src/lsp/synesisClient.js`)
+  - `_buildMiddleware()` intercepta respostas de diagnostics, inlayHints, semanticTokens e completion de acordo com as configurações do usuário.
+  - Hot-reload: toggles funcionam sem reiniciar a extensão.
+- **Capability Validation expandida** (`extension.js`)
+  - `validateLspCapabilities()` agora verifica 11 capabilities (5 required + 6 optional).
+  - Optional features (SignatureHelp, References, CodeActions, SemanticTokens, InlayHints, DocumentHighlight) logadas no Output channel como disponíveis/indisponíveis.
+
+## [0.5.20] - 2026-03-15
+
+### Fixed
+- **Syntax highlighting não aplica keywords/fields dentro de GUIDELINES** (`syntaxes/synesis.tmLanguage.json`)
+  - O bloco `meta.block.field.synesis` incluía `#keywords` e `#fields` sem contexto de bloco — `CODE:`, `CHAIN:`, etc. dentro de GUIDELINES eram destacados como nome de campo.
+  - Fix: nova regra `guidelines_block` com `begin`/`end` marcando `GUIDELINES ... END GUIDELINES` como `meta.block.guidelines.synesis`; o conteúdo interno só aceita `#comments`, ignorando keywords e fields. Incluída no `meta.block.field.synesis` antes de `#keywords`.
+
+## [0.5.19] - 2026-03-15
+
+### Changed
+- **Versões LSP e compilador no rodapé** (`extension.js`)
+  - `setLspStatus('ready', stats, lspVersion, compilerVersion)` agora exibe `[LSP v0.14.26 · synesis v0.4.1]` diretamente no texto da status bar.
+  - Tooltip inclui `— LSP vX.Y.Z · synesis vX.Y.Z` quando versões disponíveis.
+  - Valores provêm de `lsp_version` / `compiler_version` retornados por `synesis/loadProject` (LSP v0.14.26+).
+
+## [0.5.18] - 2026-03-15
+
+### Fixed
+- **Bug 2.6: fallback indevido em `synesisClient.js`** (`src/lsp/synesisClient.js`)
+  - O catch em `_actualSendRequest` fazia fallback para `client.sendRequest()` em **qualquer** erro, não apenas `-32601 Method Not Found`.
+  - Consequência: erros de runtime do LSP eram mascarados como "LSP method not supported", disparando `onLspIncompatible` e exibindo "LSP Incompatível" na barra de status.
+  - Fix: condição alterada para `this._isMethodNotFound(error)` — o fallback só ocorre quando o servidor LSP realmente não registrou o método como `executeCommand`.
+
+## [0.5.17] - 2026-03-15
+
+### Changed
+- **Performance — Fase 6: esbuild minification em produção** (`esbuild.js`)
+  - Adicionado `minify: !isWatch` — bundle é minificado em `npm run build` / `vscode:prepublish`, mas não durante `--watch` (dev).
+  - Source maps continuam gerados em ambos os modos (`sourcemap: true`).
+
+## [0.5.16] - 2026-03-15
+
+### Changed
+- **Performance — Fase 5: Mermaid.js local + CSP** (`src/viewers/graphViewer.js`, `extension.js`, `media/mermaid.min.js`)
+  - `media/mermaid.min.js` (~3.2 MB) adicionado como asset local da extensão — grafo funciona sem conexão de rede.
+  - `GraphViewer` aceita `extensionUri` como segundo argumento; `extension.js` passa `context.extensionUri`.
+  - `showGraphPanel` define `localResourceRoots: [extensionUri/media]` para autorizar acesso ao asset.
+  - `getWebviewContent` adiciona `<meta http-equiv="Content-Security-Policy">` com nonce por requisição:
+    - Asset local: `script-src 'nonce-{nonce}'` (sem CDN permitido)
+    - Fallback CDN (se `extensionUri` não disponível): `script-src 'nonce-{nonce}' https://cdn.jsdelivr.net`
+  - `<link href="https://rsms.me/inter/inter.css">` removido — fonte Inter substituída por `system-ui, sans-serif`.
+  - `getNonce()` adicionado como função utilitária de módulo (32 chars alfanuméricos).
+
+## [0.5.15] - 2026-03-15
+
+### Changed
+- **Performance — Fase 4: `synesis/getExcerpts` LSP + fallback local** (`src/viewers/abstractViewer.js`, `src/services/dataService.js`, `extension.js`)
+  - `AbstractViewer` agora aceita `dataService` como terceiro argumento do construtor.
+  - `_extractExcerpts()` tenta LSP primeiro via `dataService.getExcerpts(bibref)` (novo método `synesis/getExcerpts` do LSP v0.14.25); se bem-sucedido, monta excerpts a partir dos dados já em memória no servidor sem nenhum I/O de disco na extensão.
+  - Novo método `_buildExcerptsFromLspItems()` converte o formato LSP (`extra_fields`, `codes`, `chains`) para o mesmo shape de excerpts da lógica original, usando o `templateManager` para identificar os campos QUOTATION/MEMO/CHAIN/CODE do template do projeto.
+  - Método `_extractExcerptsLocal()` preserva integralmente a lógica anterior (leitura de arquivos + regex) como fallback: acionado se LSP não disponível, retornar null, ou lançar exceção.
+  - `DataService` e `LspDataProvider` recebem método `getExcerpts(bibref)`.
+  - Requer `synesis-lsp >= 0.14.25`.
+
+## [0.5.14] - 2026-03-15
+
+### Changed
+- **Performance — Fase 3: Remover fallback local do graphViewer** (`src/viewers/graphViewer.js`)
+  - Removidos `_findBibrefLocal()` (33 linhas), `this.parser = new SynesisParser()` e o `require('../parsers/synesisParser')`.
+  - `_findBibref()` agora confia exclusivamente no LSP (`_findBibrefViaLsp` via `vscode.executeDocumentSymbolProvider`).
+  - Se o LSP não estiver pronto, exibe mensagem clara ("Synesis LSP is not ready. Cannot resolve reference.") ao invés de fallback silencioso com parsing regex local.
+  - `synesisParser.js` permanece no projeto pois ainda é usado por `abstractViewer.js` (Fase 4).
+
+## [0.5.13] - 2026-03-15
+
+### Changed
+- **Performance — Fase 2: Cache de responses LSP + deduplicação de requests** (`src/lsp/synesisClient.js`, `extension.js`)
+  - `SynesisLspClient` agora mantém um cache em memória (TTL 5s) para respostas dos métodos `synesis/*` (exceto `synesis/loadProject`, que sempre vai ao servidor).
+  - Requests idênticos simultâneos (mesmo método + params) são coalescidos numa única Promise em voo — nenhum request duplicado sai pelo stdio enquanto o primeiro ainda não retornou.
+  - `invalidateCache()` adicionado ao cliente e chamado em `runLspLoadProject()` antes de cada `synesis/loadProject`, garantindo que os refreshes subsequentes sempre buscam dados frescos após recompilação.
+  - Erros de requests cacheáveis não são armazenados — em caso de falha a entrada não é criada, permitindo nova tentativa no próximo `refresh()`.
+  - Efeito prático: os 5 calls de `refreshAllExplorers()` disparados após `loadProject` resultam em 5 requests reais na primeira vez; chamadas subsequentes dentro do TTL (ex: segundo `refreshAllExplorers()` por debounce tardio ou comando manual) retornam do cache sem overhead de stdio.
+
+## [0.5.12] - 2026-03-15
+
+### Changed
+- **Performance — Fase 1: Debounce factory + refresh seletivo por tipo de arquivo** (`extension.js`)
+  - Substituído o debounce timer único compartilhado por instâncias `Debouncer` independentes, eliminando o risco de cancelamento cruzado entre `onDidChangeActiveTextEditor` e outros handlers.
+  - Adicionado mapa `FILE_REFRESH_MAP` e função `refreshExplorersForFileType(ext)`: ao salvar um arquivo, apenas os explorers afetados pelo tipo são atualizados:
+    - `.syn` → Reference Explorer, Code Explorer, Ontology Annotations
+    - `.syno` → Ontology Topics Explorer, Ontology Annotations
+    - `.synt` → todos os explorers (template altera tudo)
+    - `.bib` → Reference Explorer apenas
+    - `.synp` → todos os explorers (projeto altera tudo)
+  - Comportamento de múltiplos saves no mesmo debounce: se dois tipos distintos são salvos antes do timer de 1000ms disparar, o escopo mais amplo prevalece (`'all'` vence qualquer tipo específico).
+  - Caminhos que continuam com refresh completo: startup inicial, comando `synesis.lsp.loadProject`, rename de código, rename de referência.
+  - Nenhuma funcionalidade existente foi alterada — apenas a granularidade do refresh após save.
+
 ## [0.5.11] - 2026-03-06
 
 ### Added

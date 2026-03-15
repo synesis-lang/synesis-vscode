@@ -13,6 +13,10 @@ class SynesisLspClient {
         this.effectiveArgs = null;
         this.effectiveLabel = null;
         this.outputChannel = null;
+        // Cache layer (Fase 2)
+        this._responseCache = new Map();   // cacheKey → { result, expiry }
+        this._inFlightRequests = new Map(); // cacheKey → Promise
+        this._cacheTTL = 5000;             // 5 seconds
     }
 
     start(pythonPath = 'python', args = []) {
@@ -46,7 +50,8 @@ class SynesisLspClient {
             synchronize: {
                 fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{syn,synt,synp,syno,bib}')
             },
-            outputChannel: this.outputChannel
+            outputChannel: this.outputChannel,
+            middleware: this._buildMiddleware()
         };
 
         this.client = new LanguageClient(
@@ -103,6 +108,52 @@ class SynesisLspClient {
             await this.readyPromise;
         }
 
+        // loadProject is never cached — it must always reach the server.
+        // Non-synesis methods (standard LSP) are also not cached.
+        const cacheable = this._isSynesisMethod(method) && method !== 'synesis/loadProject';
+
+        if (cacheable) {
+            const cacheKey = `${method}:${JSON.stringify(params || {})}`;
+
+            // 1. Cache hit
+            const cached = this._responseCache.get(cacheKey);
+            if (cached && cached.expiry > Date.now()) {
+                return cached.result;
+            }
+
+            // 2. Deduplicate: coalesce with an identical in-flight request
+            const inFlight = this._inFlightRequests.get(cacheKey);
+            if (inFlight) {
+                return inFlight;
+            }
+
+            // 3. New request — track it, cache on success
+            const promise = this._actualSendRequest(method, params)
+                .then(result => {
+                    this._responseCache.set(cacheKey, {
+                        result,
+                        expiry: Date.now() + this._cacheTTL
+                    });
+                    return result;
+                })
+                .finally(() => {
+                    this._inFlightRequests.delete(cacheKey);
+                });
+
+            this._inFlightRequests.set(cacheKey, promise);
+            return promise;
+        }
+
+        const result = await this._actualSendRequest(method, params);
+
+        if (method === 'synesis/loadProject') {
+            this.lastLoadProjectResult = result;
+            this.lastLoadProjectAt = Date.now();
+        }
+        return result;
+    }
+
+    async _actualSendRequest(method, params) {
         let result;
         try {
             if (this._isSynesisMethod(method)) {
@@ -111,19 +162,23 @@ class SynesisLspClient {
                 result = await this.client.sendRequest(method, params);
             }
         } catch (error) {
-            if (this._isSynesisMethod(method)) {
-                // Fallback to direct request if executeCommand failed for any reason.
+            if (this._isSynesisMethod(method) && this._isMethodNotFound(error)) {
+                // Fallback to direct request only when executeCommand is not registered (-32601).
                 result = await this.client.sendRequest(method, params);
             } else {
                 throw error;
             }
         }
-
-        if (method === 'synesis/loadProject') {
-            this.lastLoadProjectResult = result;
-            this.lastLoadProjectAt = Date.now();
-        }
         return result;
+    }
+
+    /**
+     * Invalidates the response cache. Must be called before synesis/loadProject
+     * so that subsequent explorer refreshes fetch fresh data from the server.
+     */
+    invalidateCache() {
+        this._responseCache.clear();
+        // Do not clear _inFlightRequests — in-flight promises resolve to their own results.
     }
 
     _isSynesisMethod(method) {
@@ -160,6 +215,59 @@ class SynesisLspClient {
 
     getEffectiveLabel() {
         return this.effectiveLabel;
+    }
+
+    _getConfig(key) {
+        return vscode.workspace.getConfiguration('synesisExplorer').get(key);
+    }
+
+    /**
+     * Builds LSP middleware that gates features based on user configuration.
+     * Each provider check reads config at call time so hot-reload works without restart.
+     */
+    _buildMiddleware() {
+        return {
+            // Gate: diagnostics
+            handleDiagnostics: (uri, diagnostics, next) => {
+                if (this._getConfig('diagnostics.enabled') === false) {
+                    next(uri, []);
+                    return;
+                }
+                next(uri, diagnostics);
+            },
+
+            // Gate: inlay hints
+            provideInlayHints: (document, range, token, next) => {
+                if (this._getConfig('inlayHints.enabled') === false) {
+                    return Promise.resolve([]);
+                }
+                return next(document, range, token);
+            },
+
+            // Gate: semantic tokens (full)
+            provideDocumentSemanticTokens: (document, token, next) => {
+                if (this._getConfig('semanticHighlighting.enabled') === false) {
+                    return Promise.resolve(null);
+                }
+                return next(document, token);
+            },
+
+            // Gate: completion — filter out code suggestions when autoImportCodes is off
+            provideCompletionItem: (document, position, context, token, next) => {
+                return next(document, position, context, token).then(result => {
+                    if (this._getConfig('completion.autoImportCodes') === false && result) {
+                        const items = Array.isArray(result) ? result : (result.items || []);
+                        const filtered = items.filter(item => {
+                            // Remove items with kind=EnumMember (codes from ontology)
+                            // CompletionItemKind.EnumMember = 20
+                            return item.kind !== 20;
+                        });
+                        return Array.isArray(result) ? filtered : { ...result, items: filtered };
+                    }
+                    return result;
+                });
+            }
+        };
     }
 }
 

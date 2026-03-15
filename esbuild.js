@@ -9,7 +9,8 @@ const buildOptions = {
     target: 'node14',
     outfile: 'dist/extension.js',
     external: ['vscode'],
-    sourcemap: true
+    sourcemap: true,
+    minify: !isWatch  // minify in production, skip during dev watch
 };
 
 if (isWatch) {

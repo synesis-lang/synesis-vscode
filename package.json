@@ -2,7 +2,7 @@
   "name": "synesis-explorer",
   "displayName": "Synesis Explorer",
   "description": "VSCode extension for exploring Synesis knowledge synthesis files",
-  "version": "0.5.11",
+  "version": "0.5.24",
   "publisher": "synesis",
   "repository": {
     "type": "git",
@@ -34,6 +34,19 @@
         "language": "synesis",
         "scopeName": "source.synesis",
         "path": "./syntaxes/synesis.tmLanguage.json"
+      }
+    ],
+    "semanticTokenScopes": [
+      {
+        "language": "synesis",
+        "scopes": {
+          "keyword":    ["keyword.control.block.synesis"],
+          "variable":   ["entity.name.reference.synesis"],
+          "property":   ["entity.name.tag.field.synesis"],
+          "string":     ["string.quoted.field.synesis"],
+          "enumMember": ["variable.other.code.synesis"],
+          "namespace":  ["keyword.control.block.synesis"]
+        }
       }
     ],
     "themes": [
@@ -375,6 +388,26 @@
           "items": {
             "type": "string"
           }
+        },
+        "synesisExplorer.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable inline diagnostics (error/warning squiggles) from the Synesis LSP."
+        },
+        "synesisExplorer.inlayHints.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline hints after @bibrefs (e.g. \"(Author, Year)\")."
+        },
+        "synesisExplorer.semanticHighlighting.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable AST-based semantic syntax highlighting (more accurate than TextMate grammar). Requires Synesis Dark or Synesis Light theme, or a theme with semanticTokenColors support."
+        },
+        "synesisExplorer.completion.autoImportCodes": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include ontology codes from the compiled project in autocomplete suggestions."
         }
       }
     }

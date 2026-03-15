@@ -1,13 +1,24 @@
 {
   "name": "Synesis Light",
   "type": "light",
+  "semanticHighlighting": true,
   "colors": {
-    "editor.background": "#ffffff",
-    "editor.foreground": "#2d2d2d"
+    "editor.background": "#faf4ed",
+    "editor.foreground": "#575279"
+  },
+  "semanticTokenColors": {
+    "keyword": { "foreground": "#8839ef" },
+    "keyword.declaration": { "foreground": "#8839ef", "fontStyle": "bold" },
+    "variable": { "foreground": "#df8e1d" },
+    "variable.declaration": { "foreground": "#df8e1d", "fontStyle": "underline" },
+    "property": { "foreground": "#1e66f5", "fontStyle": "bold" },
+    "string": { "foreground": "#40a02b" },
+    "enumMember": { "foreground": "#179299" },
+    "namespace": { "foreground": "#7287fd" }
   },
   "tokenColors": [
     {
-      "name": "Keywords",
+      "name": "Keywords — block structure (SOURCE, ITEM, END, ONTOLOGY)",
       "scope": [
         "keyword.control.block.synesis",
         "keyword.control.field.synesis",
@@ -15,55 +26,59 @@
         "keyword.control.scope.synesis"
       ],
       "settings": {
-        "foreground": "#c62828",
+        "foreground": "#8839ef",
         "fontStyle": "bold"
       }
     },
     {
-      "name": "References",
+      "name": "References (@bibref)",
       "scope": "entity.name.reference.synesis",
       "settings": {
-        "foreground": "#ef6c00",
+        "foreground": "#df8e1d",
         "fontStyle": "underline"
       }
     },
     {
-      "name": "Fields",
-      "scope": "entity.name.tag.field.synesis",
+      "name": "Field Names (code:, text:, method:)",
+      "scope": [
+        "entity.name.tag.field.synesis",
+        "entity.name.field.synesis"
+      ],
       "settings": {
-        "foreground": "#00838f",
+        "foreground": "#1e66f5",
         "fontStyle": "bold"
       }
     },
     {
-      "name": "Chain Codes",
+      "name": "Codes — ontology concepts (Trust, CCS_Support)",
       "scope": "variable.other.code.synesis",
       "settings": {
-        "foreground": "#1565c0"
+        "foreground": "#179299"
       }
     },
     {
-      "name": "Chain Relations",
+      "name": "Relations (INFLUENCES, ENABLES, CONSTRAINS, ...)",
       "scope": "constant.language.relation.synesis",
       "settings": {
-        "foreground": "#d84315"
+        "foreground": "#d20f39",
+        "fontStyle": "bold"
       }
     },
     {
-      "name": "Chain Arrows",
+      "name": "Chain Arrows (->)",
       "scope": "keyword.operator.arrow.synesis",
       "settings": {
-        "foreground": "#2d2d2d"
+        "foreground": "#9893a5"
       }
     },
     {
-      "name": "Field Values",
+      "name": "Field Values (text content)",
       "scope": [
         "string.quoted.field.synesis",
         "string.unquoted.field.synesis"
       ],
       "settings": {
-        "foreground": "#6d4c41"
+        "foreground": "#40a02b"
       }
     },
     {
@@ -73,7 +88,22 @@
         "comment.line.number-sign.synesis"
       ],
       "settings": {
-        "foreground": "#2e7d32",
+        "foreground": "#9893a5",
+        "fontStyle": "italic"
+      }
+    },
+    {
+      "name": "Comma Separators",
+      "scope": "punctuation.separator.comma.synesis",
+      "settings": {
+        "foreground": "#9893a5"
+      }
+    },
+    {
+      "name": "Guidelines Content (plain instructional text)",
+      "scope": "string.unquoted.guidelines.synesis",
+      "settings": {
+        "foreground": "#6e6a86",
         "fontStyle": "italic"
       }
     }

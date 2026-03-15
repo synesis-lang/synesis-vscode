@@ -209,6 +209,17 @@ class LspDataProvider {
         };
     }
 
+    async getExcerpts(workspaceRoot, bibref) {
+        const result = await this._sendRequestWithFallback(
+            'synesis/getExcerpts',
+            { workspaceRoot, bibref }
+        );
+        if (!result || !result.success) {
+            return null;
+        }
+        return result.items || [];
+    }
+
     async getOntologyAnnotations(workspaceRoot, activeFile) {
         const params = { workspaceRoot };
         if (activeFile) {
@@ -312,6 +323,10 @@ class DataService {
         return this._callLsp('getOntologyAnnotations', activeFile);
     }
 
+    async getExcerpts(bibref) {
+        return this._callLsp('getExcerpts', bibref);
+    }
+
     async _callLsp(method, ...args) {
         const lspReady = Boolean(this.lspClient && this.lspClient.isReady());
 
@@ -393,6 +408,8 @@ class DataService {
                 return 'synesis/getOntologyTopics';
             case 'getOntologyAnnotations':
                 return 'synesis/getOntologyAnnotations';
+            case 'getExcerpts':
+                return 'synesis/getExcerpts';
             default:
                 return method;
         }
@@ -407,6 +424,8 @@ class DataService {
             case 'getOntologyAnnotations':
                 return [];
             case 'getRelationGraph':
+                return null;
+            case 'getExcerpts':
                 return null;
             default:
                 return null;

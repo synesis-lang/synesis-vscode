@@ -22,9 +22,10 @@ const bibtexParser = require('../parsers/bibtexParser');
 const fuzzyMatcher = require('../utils/fuzzyMatcher');
 
 class AbstractViewer {
-    constructor(workspaceScanner, templateManager) {
+    constructor(workspaceScanner, templateManager, dataService) {
         this.scanner = workspaceScanner;
         this.templateManager = templateManager;
+        this.dataService = dataService || null;
         this.parser = new SynesisParser();
         this.colors = [
             '#ffeb3b', '#ff9800', '#f44336', '#e91e63',
@@ -135,6 +136,114 @@ class AbstractViewer {
     }
 
     async _extractExcerpts(bibref, projectUri) {
+        // Try LSP first — eliminates all local I/O and regex parsing
+        if (this.dataService) {
+            try {
+                const lspItems = await this.dataService.getExcerpts(bibref);
+                if (lspItems && lspItems.length > 0) {
+                    const registry = await this.templateManager.loadTemplate(projectUri);
+                    return this._buildExcerptsFromLspItems(lspItems, registry);
+                }
+            } catch (err) {
+                console.warn('AbstractViewer._extractExcerpts: LSP getExcerpts failed, falling back to local:', err.message);
+            }
+        }
+
+        // Fallback: local I/O + regex parsing (kept during transition)
+        return this._extractExcerptsLocal(bibref, projectUri);
+    }
+
+    _buildExcerptsFromLspItems(lspItems, registry) {
+        const quotationFields = getFieldsByType(registry, 'QUOTATION');
+        const memoFields = getFieldsByType(registry, 'MEMO');
+        const chainFields = getFieldsByType(registry, 'CHAIN');
+        const codeFields = getFieldsByType(registry, 'CODE');
+
+        const useMemoAsExcerpt = quotationFields.length === 0 && memoFields.length > 0;
+        const excerptFields = quotationFields.length > 0 ? quotationFields : (useMemoAsExcerpt ? memoFields : []);
+        const showNote = memoFields.length > 0 && !useMemoAsExcerpt;
+        const showChain = chainFields.length > 0;
+        const showCodes = !showChain && codeFields.length > 0;
+
+        const excerpts = [];
+
+        for (const item of lspItems) {
+            const fields = item.extra_fields || {};
+            // Normalise field names to lowercase for lookup
+            const fieldsLower = {};
+            for (const [k, v] of Object.entries(fields)) {
+                fieldsLower[k.toLowerCase()] = v;
+            }
+
+            const noteValues = showNote ? collectFieldValues(fieldsLower, memoFields) : [];
+            const chainValues = showChain ? collectFieldValues(fieldsLower, chainFields) : [];
+
+            // Codes: from extra_fields CODE/code fields, or from item.codes
+            let codes = [];
+            if (showCodes) {
+                codes = extractCodesFromFields(fieldsLower, codeFields);
+                if (codes.length === 0 && Array.isArray(item.codes) && item.codes.length > 0) {
+                    codes = item.codes.map(String);
+                }
+            }
+
+            // Chain fallback: if chainValues empty but item.chains has data
+            let effectiveChainValues = chainValues;
+            if (showChain && chainValues.length === 0 && Array.isArray(item.chains) && item.chains.length > 0) {
+                effectiveChainValues = item.chains.map(String);
+            }
+
+            if (excerptFields.length === 0) {
+                const maxPairs = Math.max(noteValues.length, effectiveChainValues.length, codes.length > 0 ? 1 : 0);
+                if (maxPairs === 0) continue;
+                for (let i = 0; i < maxPairs; i++) {
+                    excerpts.push({
+                        text: '',
+                        note: noteValues[i] || '',
+                        chain: effectiveChainValues[i] || '',
+                        codes: i === 0 ? codes : [],
+                        line: item.line || 0,
+                        file: item.file || ''
+                    });
+                }
+                continue;
+            }
+
+            for (const fieldName of excerptFields) {
+                const rawValue = fieldsLower[fieldName.toLowerCase()];
+                if (!rawValue) continue;
+                const excerptText = normalizeExcerpt(Array.isArray(rawValue) ? rawValue[0] || '' : String(rawValue));
+                if (!excerptText) continue;
+
+                if (noteValues.length <= 1 && effectiveChainValues.length <= 1) {
+                    excerpts.push({
+                        text: excerptText,
+                        note: noteValues[0] || '',
+                        chain: effectiveChainValues[0] || '',
+                        codes,
+                        line: item.line || 0,
+                        file: item.file || ''
+                    });
+                } else {
+                    const maxPairs = Math.max(noteValues.length, effectiveChainValues.length);
+                    for (let i = 0; i < maxPairs; i++) {
+                        excerpts.push({
+                            text: excerptText,
+                            note: noteValues[i] || '',
+                            chain: effectiveChainValues[i] || '',
+                            codes: i === 0 ? codes : [],
+                            line: item.line || 0,
+                            file: item.file || ''
+                        });
+                    }
+                }
+            }
+        }
+
+        return { excerpts, display: { showNote, showChain, showCodes } };
+    }
+
+    async _extractExcerptsLocal(bibref, projectUri) {
         const excerpts = [];
         const registry = await this.templateManager.loadTemplate(projectUri);
         const quotationFields = getFieldsByType(registry, 'QUOTATION');
