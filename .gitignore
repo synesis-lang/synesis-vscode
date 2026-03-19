@@ -37,3 +37,9 @@ npm-debug.log*
 coverage/
 .nyc_output/
 nul
+.gitnexus
+.claude
+CLAUDE.md
+AGENTS.md
+synesis-explorer-performance-plan.md
+synesis-explorer-features.md
