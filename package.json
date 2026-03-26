@@ -2,7 +2,7 @@
   "name": "synesis-explorer",
   "displayName": "Synesis Explorer",
   "description": "VSCode extension for exploring Synesis knowledge synthesis files",
-  "version": "0.5.24",
+  "version": "0.5.26",
   "publisher": "synesis",
   "repository": {
     "type": "git",
@@ -45,7 +45,9 @@
           "property":   ["entity.name.tag.field.synesis"],
           "string":     ["string.quoted.field.synesis"],
           "enumMember": ["variable.other.code.synesis"],
-          "namespace":  ["keyword.control.block.synesis"]
+          "namespace":  ["keyword.control.block.synesis"],
+          "comment":    ["comment.line.synesis"],
+          "operator":   ["keyword.operator.arrow.synesis"]
         }
       }
     ],
@@ -224,6 +226,10 @@
       {
         "command": "synesis.reference.rename",
         "title": "Rename Reference"
+      },
+      {
+        "command": "synesis.coder.codeSelection",
+        "title": "Synesis: Code Selection"
       }
     ],
     "keybindings": [
@@ -253,6 +259,12 @@
         "command": "synesis.reference.rename",
         "key": "F2",
         "when": "focusedView == synesisReferenceExplorer"
+      },
+      {
+        "command": "synesis.coder.codeSelection",
+        "key": "ctrl+shift+i",
+        "mac": "cmd+shift+i",
+        "when": "editorTextFocus && editorLangId == synesis && editorHasSelection && synesis.activeFileKind == syn"
       }
     ],
     "menus": {
@@ -355,6 +367,13 @@
           "when": "false"
         }
       ],
+      "editor/context": [
+        {
+          "command": "synesis.coder.codeSelection",
+          "when": "editorLangId == synesis && editorHasSelection && synesis.activeFileKind == syn",
+          "group": "1_modification"
+        }
+      ],
       "view/item/context": [
         {
           "command": "synesis.code.goToDefinition",
@@ -367,6 +386,11 @@
           "group": "7_modification"
         }
       ]
+    },
+    "configurationDefaults": {
+      "[synesis]": {
+        "editor.semanticHighlighting.enabled": true
+      }
     },
     "configuration": {
       "title": "Synesis Explorer",
@@ -408,6 +432,11 @@
           "type": "boolean",
           "default": true,
           "description": "Include ontology codes from the compiled project in autocomplete suggestions."
+        },
+        "synesisExplorer.coder.path": {
+          "type": "string",
+          "default": "synesis-coder",
+          "description": "Path to the synesis-coder executable."
         }
       }
     }

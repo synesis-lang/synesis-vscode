@@ -14,7 +14,9 @@
     "property": { "foreground": "#7dcfff", "fontStyle": "bold" },
     "string": { "foreground": "#9ece6a" },
     "enumMember": { "foreground": "#2ac3de" },
-    "namespace": { "foreground": "#7aa2f7" }
+    "namespace": { "foreground": "#bb9af7", "fontStyle": "bold" },
+    "comment": { "foreground": "#565f89", "fontStyle": "italic" },
+    "operator": { "foreground": "#565f89" }
   },
   "tokenColors": [
     {

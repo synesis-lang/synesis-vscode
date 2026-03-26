@@ -22,6 +22,7 @@ class RelationExplorer {
         this.filterText = '';
         this.placeholder = null;
         this._lastDataHash = null; // Cache hash to avoid unnecessary refreshes
+        this._treeView = null; // set by extension.js after createTreeView
 
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -76,6 +77,7 @@ class RelationExplorer {
             }
 
             await this._setHasChains(this.relations.size > 0);
+            this._updateTitle();
             this._onDidChangeTreeData.fire();
         } catch (error) {
             console.error('RelationExplorer: Error scanning relations:', error);
@@ -152,6 +154,12 @@ class RelationExplorer {
     async _setFilterActive(value) {
         await vscode.commands.executeCommand('setContext', 'synesis.relation.filterActive', value);
     }
+
+    _updateTitle() {
+        if (!this._treeView) return;
+        const n = this.relations.size;
+        this._treeView.title = n > 0 ? `Relations (${n})` : 'Relations';
+    }
 }
 
 class RelationTreeItem extends vscode.TreeItem {
@@ -160,7 +168,8 @@ class RelationTreeItem extends vscode.TreeItem {
 
         this.relation = relation;
         this.triplets = triplets;
-        this.description = `${triplets.length} triplet(s)`;
+        const n = triplets.length;
+        this.description = n === 1 ? '1 chain' : `${n} chains`;
         this.iconPath = new vscode.ThemeIcon('link');
         this.contextValue = 'relation';
     }
@@ -168,16 +177,19 @@ class RelationTreeItem extends vscode.TreeItem {
 
 class TripletTreeItem extends vscode.TreeItem {
     constructor(triplet) {
-        const label = `${triplet.from} -> ${triplet.to}`;
+        const label = `${triplet.from} \u2192 ${triplet.to}`;
 
         super(label, vscode.TreeItemCollapsibleState.None);
 
-        // Validar se file existe
         if (!triplet.file) {
-            console.warn('TripletTreeItem: triplet.file is null or undefined', triplet);
-            this.description = `${triplet.type} (no location)`;
+            this.description = triplet.type || '';
         } else {
-            this.description = triplet.type;
+            const path = require('path');
+            const fileName = path.basename(triplet.file);
+            const lineLabel = typeof triplet.line === 'number' && triplet.line >= 0
+                ? triplet.line + 1
+                : '?';
+            this.description = `${fileName}:${lineLabel}`;
         }
 
         this.iconPath = new vscode.ThemeIcon(triplet.file ? 'file' : 'question');

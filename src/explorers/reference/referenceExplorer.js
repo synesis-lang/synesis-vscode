@@ -28,7 +28,8 @@ class ReferenceExplorer {
         this.references = new Map(); // bibref -> [occurrences]
         this.filterText = '';
         this.placeholder = null;
-        this._lastDataHash = null; // Cache hash to avoid unnecessary refreshes
+        this._lastDataHash = null;
+        this._treeView = null; // set by extension.js after createTreeView
 
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -81,6 +82,7 @@ class ReferenceExplorer {
                 this.references.set(ref.bibref, ref.occurrences);
             }
 
+            this._updateTitle();
             this._onDidChangeTreeData.fire();
         } catch (error) {
             console.error('ReferenceExplorer: Error scanning workspace:', error);
@@ -167,21 +169,32 @@ class ReferenceExplorer {
     async _setFilterActive(value) {
         await vscode.commands.executeCommand('setContext', 'synesis.reference.filterActive', value);
     }
+
+    _updateTitle() {
+        if (!this._treeView) return;
+        const n = this.references.size;
+        this._treeView.title = n > 0 ? `References (${n})` : 'References';
+    }
 }
 
 /**
  * TreeItem para uma referência (nível raiz)
  */
 class ReferenceTreeItem extends vscode.TreeItem {
-    constructor(bibref, occurrenceCount, itemCount, occurrences) {
+    constructor(bibref, occurrenceCount, itemCount, occurrences, title) {
         super(bibref, vscode.TreeItemCollapsibleState.Collapsed);
 
         this.bibref = bibref;
         this.occurrences = occurrences;
 
-        this.description = `${occurrenceCount} file(s), ${itemCount} item(s)`;
+        const filesLabel = occurrenceCount === 1 ? '1 file' : `${occurrenceCount} files`;
+        const itemsLabel = itemCount === 1 ? '1 item' : `${itemCount} items`;
+        this.description = `${itemsLabel} in ${filesLabel}`;
         this.iconPath = new vscode.ThemeIcon('book');
         this.contextValue = 'reference';
+        if (title) {
+            this.tooltip = title;
+        }
     }
 }
 
@@ -198,7 +211,8 @@ class OccurrenceTreeItem extends vscode.TreeItem {
 
         super(label, vscode.TreeItemCollapsibleState.None);
 
-        this.description = `${occurrence.itemCount} item(s)`;
+        const n = occurrence.itemCount;
+        this.description = n === 1 ? '1 item' : `${n} items`;
         this.iconPath = new vscode.ThemeIcon('file');
         this.tooltip = occurrence.file;
         this.contextValue = 'occurrence';

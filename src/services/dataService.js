@@ -69,10 +69,13 @@ class LspDataProvider {
         const grouped = new Map();
         for (const ref of (result.references || [])) {
             if (!grouped.has(ref.bibref)) {
-                grouped.set(ref.bibref, { bibref: ref.bibref, itemCount: 0, occurrences: [] });
+                grouped.set(ref.bibref, { bibref: ref.bibref, itemCount: 0, occurrences: [], title: ref.title || '' });
             }
             const entry = grouped.get(ref.bibref);
             entry.itemCount += ref.itemCount || 0;
+            if (!entry.title && ref.title) {
+                entry.title = ref.title;
+            }
             if (ref.location) {
                 const resolvedFile = this._resolveFilePath(ref.location.file, workspaceRoot);
                 entry.occurrences.push({

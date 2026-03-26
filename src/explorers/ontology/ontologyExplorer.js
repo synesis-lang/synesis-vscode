@@ -19,6 +19,7 @@ class OntologyExplorer {
         this.filterText = '';
         this.placeholder = null;
         this._lastDataHash = null; // Cache hash to avoid unnecessary refreshes
+        this._treeView = null; // set by extension.js after createTreeView
 
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -86,6 +87,7 @@ class OntologyExplorer {
 
             this.topics = topicsArray;
             await this._setHasTopics(this.topics.length > 0);
+            this._updateTitle();
             this._onDidChangeTreeData.fire();
         } catch (error) {
             console.error('OntologyExplorer: Error loading ontology topics:', error);
@@ -156,6 +158,12 @@ class OntologyExplorer {
         await vscode.commands.executeCommand('setContext', 'synesis.ontology.filterActive', value);
     }
 
+    _updateTitle() {
+        if (!this._treeView) return;
+        const n = this.topics.length;
+        this._treeView.title = n > 0 ? `Ontology Topics (${n})` : 'Ontology Topics';
+    }
+
     _filterTopics(topics, filterText) {
         if (!filterText) {
             return topics.filter(topic => !this._isNoiseTopic(topic));
@@ -202,14 +210,23 @@ class TopicTreeItem extends vscode.TreeItem {
 
         this.children = children;
         this.contextValue = 'ontologyTopic';
-        this.iconPath = new vscode.ThemeIcon('symbol-structure');
+
+        if (children.length > 0) {
+            this.iconPath = new vscode.ThemeIcon('tag');
+            const n = children.length;
+            this.description = n === 1 ? '1 concept' : `${n} concepts`;
+        } else {
+            this.iconPath = new vscode.ThemeIcon('pin');
+        }
 
         if (topic.file) {
             const fileName = path.basename(topic.file);
             const lineLabel = typeof topic.line === 'number' && topic.line >= 0
                 ? topic.line + 1
                 : '?';
-            this.description = `${fileName}:${lineLabel}`;
+            if (children.length === 0) {
+                this.description = `${fileName}:${lineLabel}`;
+            }
             this.tooltip = topic.file;
             this.command = {
                 command: 'synesis.openLocation',

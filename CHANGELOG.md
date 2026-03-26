@@ -5,6 +5,42 @@ All notable changes to the Synesis Explorer extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.26] - 2026-03-26
+
+### Changed
+- **Sidebar — todas as 5 views melhoradas**
+  - **References**: descrição `N items in N files` (singular/plural), tooltip com título da referência, cabeçalho `References (N)`
+  - **Codes**: ordenação por frequência de uso decrescente, descrição `N uses` com sufixo `· not in ontology` quando não definido na ontologia, contexto de ocorrência exibe `code field` / `chain · fieldName`, cabeçalho `Codes (N)`
+  - **Relations**: descrição `N chains` nos itens raiz, seta unicode `→` nos triplets, descrição `arquivo:linha` nos triplets filhos, cabeçalho `Relations (N)`
+  - **Ontology Topics**: nós pai com ícone `tag` e descrição `N concepts`, nós folha com ícone `pin` e descrição `arquivo:linha`, cabeçalho `Ontology Topics (N)`
+  - **Ontology**: descrição `N uses · arquivo:linha` (quando definido na ontologia) ou `N uses · not in ontology`, contexto de ocorrência exibe `code field` / `chain · fieldName`, cabeçalho `Ontology (N)`
+- **References**: título da referência bibliográfica incluído no payload LSP e exibido como tooltip
+
+## [0.5.25] - 2026-03-23
+
+### Added
+- **Synesis Coder integration** — `synesis.coder.codeSelection` command
+  integrates `synesis-coder item` mode directly into the editor
+  - **Context menu**: right-click selected text in a `.syn` file →
+    "Synesis: Code Selection" generates an ITEM block via the `synesis-coder` CLI
+    and replaces the selection atomically
+  - **Keyboard shortcut**: `Ctrl+Shift+I` / `Cmd+Shift+I` (when editor has
+    selection in a `.syn` file)
+  - **Auto-detection of bibref**: reads the SOURCE/ITEM block under the cursor
+    using `SynesisParser`; falls back to the nearest preceding block; prompts
+    the user manually only when no block is found
+  - **Progress notification** with Cancel button — calls `synesis-coder item`
+    as a subprocess via `child_process.execFile` (shell-safe for text with
+    quotes, newlines, and special characters)
+  - **Cancellation support**: Cancel button kills the subprocess via
+    `CancellationToken.onCancellationRequested → child.kill()`
+  - Friendly error when `synesis-coder` is not installed (`ENOENT` → message
+    suggesting `pip install synesis-coder`)
+- **New configuration**: `synesisExplorer.coder.path` (default: `"synesis-coder"`)
+  — path to the `synesis-coder` executable for non-default installations
+- **New module**: `src/services/coderService.js` — `CoderService` class
+  encapsulating bibref detection, CLI invocation, and editor replacement
+
 ## [0.5.24] - 2026-03-15
 
 ### Fixed

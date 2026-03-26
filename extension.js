@@ -41,6 +41,9 @@ const OntologyAnnotationExplorer = require('./src/explorers/ontology/ontologyAnn
 const GraphViewer = require('./src/viewers/graphViewer');
 const AbstractViewer = require('./src/viewers/abstractViewer');
 
+// Services
+const CoderService = require('./src/services/coderService');
+
 let lspClient;
 let lspStatusItem;
 let lspLoadTimer;
@@ -126,6 +129,9 @@ function activate(context) {
     const templateManager = new TemplateManager();
     const workspaceScanner = new WorkspaceScanner();
 
+    // Coder service (synesis-coder CLI integration)
+    const coderService = new CoderService(workspaceScanner);
+
     // DataService (LSP-only adapter)
     dataService = new DataService({
         lspClient: lspClient || null,
@@ -138,30 +144,35 @@ function activate(context) {
         treeDataProvider: referenceExplorer,
         showCollapseAll: true
     });
+    referenceExplorer._treeView = referenceTreeView;
 
     const codeExplorer = new CodeExplorer(dataService);
     codeTreeView = vscode.window.createTreeView('synesisCodeExplorer', {
         treeDataProvider: codeExplorer,
         showCollapseAll: true
     });
+    codeExplorer._treeView = codeTreeView;
 
     const relationExplorer = new RelationExplorer(dataService);
     relationTreeView = vscode.window.createTreeView('synesisRelationExplorer', {
         treeDataProvider: relationExplorer,
         showCollapseAll: true
     });
+    relationExplorer._treeView = relationTreeView;
 
     const ontologyExplorer = new OntologyExplorer(dataService);
     const ontologyTreeView = vscode.window.createTreeView('synesisOntologyTopicsExplorer', {
         treeDataProvider: ontologyExplorer,
         showCollapseAll: true
     });
+    ontologyExplorer._treeView = ontologyTreeView;
 
     const ontologyAnnotationExplorer = new OntologyAnnotationExplorer(dataService);
     const ontologyAnnotationTreeView = vscode.window.createTreeView('synesisOntologyAnnotationExplorer', {
         treeDataProvider: ontologyAnnotationExplorer,
         showCollapseAll: true
     });
+    ontologyAnnotationExplorer._treeView = ontologyAnnotationTreeView;
 
     const abstractViewer = new AbstractViewer(workspaceScanner, templateManager, dataService);
     const graphViewer = new GraphViewer(dataService, context.extensionUri);
@@ -606,6 +617,17 @@ function activate(context) {
                 await runLspLoadProject({ showProgress: false, showErrorMessage: false });
                 vscode.window.showInformationMessage(`Renamed reference "${oldName}".`);
             }
+        })
+    );
+
+    // Synesis Coder: code selection via context menu
+    context.subscriptions.push(
+        vscode.commands.registerCommand('synesis.coder.codeSelection', async () => {
+            const editor = vscode.window.activeTextEditor;
+            if (!editor) {
+                return;
+            }
+            await coderService.codeSelection(editor);
         })
     );
 

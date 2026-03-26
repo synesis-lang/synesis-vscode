@@ -23,6 +23,7 @@ class CodeExplorer {
         this.filterText = '';
         this.placeholder = null;
         this._lastDataHash = null; // Cache hash to avoid unnecessary refreshes
+        this._treeView = null; // set by extension.js after createTreeView
 
         this._onDidChangeTreeData = new vscode.EventEmitter();
         this.onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -84,6 +85,7 @@ class CodeExplorer {
             }
 
             await this._setHasCodes(this.codes.size > 0);
+            this._updateTitle();
             this._onDidChangeTreeData.fire();
         } catch (error) {
             console.error('CodeExplorer: Error scanning codes:', error);
@@ -112,7 +114,7 @@ class CodeExplorer {
                 items.push(new CodeTreeItem(code, data));
             }
 
-            return items.sort((a, b) => a.code.localeCompare(b.code));
+            return items.sort((a, b) => b.usageCount - a.usageCount || a.code.localeCompare(b.code));
         }
 
         if (element.isPlaceholder) {
@@ -162,6 +164,12 @@ class CodeExplorer {
     async _setFilterActive(value) {
         await vscode.commands.executeCommand('setContext', 'synesis.code.filterActive', value);
     }
+
+    _updateTitle() {
+        if (!this._treeView) return;
+        const n = this.codes.size;
+        this._treeView.title = n > 0 ? `Codes (${n})` : 'Codes';
+    }
 }
 
 class CodeTreeItem extends vscode.TreeItem {
@@ -174,9 +182,11 @@ class CodeTreeItem extends vscode.TreeItem {
         super(code, state);
 
         this.code = code;
+        this.usageCount = typeof data.usageCount === 'number' ? data.usageCount : 0;
         this.occurrences = data.occurrences;
-        const occurrenceCount = Array.isArray(data.occurrences) ? data.occurrences.length : 0;
-        this.description = `${occurrenceCount} occurrence(s)`;
+        const usageCount = this.usageCount;
+        const usesLabel = usageCount === 1 ? '1 use' : `${usageCount} uses`;
+        this.description = data.ontologyDefined ? usesLabel : `${usesLabel} · not in ontology`;
         this.iconPath = new vscode.ThemeIcon(data.ontologyDefined ? 'symbol-key' : 'symbol-variable');
         this.contextValue = 'code';
     }
@@ -192,7 +202,10 @@ class OccurrenceTreeItem extends vscode.TreeItem {
 
         super(label, vscode.TreeItemCollapsibleState.None);
 
-        this.description = `${occurrence.context} (${occurrence.field})`;
+        const ctx = occurrence.context || 'code';
+        const fld = occurrence.field || '';
+        const ctxLabel = ctx === 'code' ? 'code field' : ctx;
+        this.description = fld && fld !== ctx ? `${ctxLabel} · ${fld}` : ctxLabel;
         this.iconPath = new vscode.ThemeIcon('file');
         this.tooltip = occurrence.file || '<file not available>';
         this.contextValue = 'codeOccurrence';
