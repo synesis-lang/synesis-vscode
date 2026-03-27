@@ -13,7 +13,6 @@
  *     - DataService: LSP-only data access
  */
 
-const path = require('path');
 const vscode = require('vscode');
 
 class CodeExplorer {
@@ -114,7 +113,7 @@ class CodeExplorer {
                 items.push(new CodeTreeItem(code, data));
             }
 
-            return items.sort((a, b) => b.usageCount - a.usageCount || a.code.localeCompare(b.code));
+            return items.sort((a, b) => a.code.localeCompare(b.code) || b.usageCount - a.usageCount);
         }
 
         if (element.isPlaceholder) {
@@ -184,33 +183,28 @@ class CodeTreeItem extends vscode.TreeItem {
         this.code = code;
         this.usageCount = typeof data.usageCount === 'number' ? data.usageCount : 0;
         this.occurrences = data.occurrences;
-        const usageCount = this.usageCount;
-        const usesLabel = usageCount === 1 ? '1 use' : `${usageCount} uses`;
-        this.description = data.ontologyDefined ? usesLabel : `${usesLabel} · not in ontology`;
+        this.description = `(${this.usageCount})`;
         this.iconPath = new vscode.ThemeIcon(data.ontologyDefined ? 'symbol-key' : 'symbol-variable');
+        this.tooltip = data.ontologyDefined ? code : `${code} · not in ontology`;
         this.contextValue = 'code';
     }
 }
 
 class OccurrenceTreeItem extends vscode.TreeItem {
     constructor(occurrence) {
-        const fileName = occurrence.file ? path.basename(occurrence.file) : '<unknown file>';
         const lineLabel = typeof occurrence.line === 'number' && occurrence.line >= 0
             ? occurrence.line + 1
             : '?';
-        const label = `${fileName}:${lineLabel}`;
 
-        super(label, vscode.TreeItemCollapsibleState.None);
+        super(`Ln ${lineLabel}`, vscode.TreeItemCollapsibleState.None);
 
-        const ctx = occurrence.context || 'code';
-        const fld = occurrence.field || '';
-        const ctxLabel = ctx === 'code' ? 'code field' : ctx;
-        this.description = fld && fld !== ctx ? `${ctxLabel} · ${fld}` : ctxLabel;
+        const ctx = (occurrence.context || 'code').toLowerCase();
+        const fld = (occurrence.field || '').toLowerCase();
+        this.description = (ctx === 'chain' || fld === 'chain') ? 'chain' : '';
         this.iconPath = new vscode.ThemeIcon('file');
         this.tooltip = occurrence.file || '<file not available>';
         this.contextValue = 'codeOccurrence';
 
-        // Só adicionar comando se file existir
         if (occurrence.file) {
             this.command = {
                 command: 'synesis.openLocation',

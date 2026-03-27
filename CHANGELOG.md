@@ -5,6 +5,19 @@ All notable changes to the Synesis Explorer extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.27] - 2026-03-26
+
+### Changed
+- **Sidebar — redesign minimalista de todos os 5 explorers**
+  - Redução de ruído textual: contadores verbosos (`N items in N files`, `N uses`, `N chains`) substituídos por badges `(N)` na `description`.
+  - Caminhos de arquivo removidos dos labels dos filhos; substituídos por `Ln X` — nome do arquivo movido para o `tooltip` (visível ao passar o mouse).
+  - **References**: nó raiz `@bibref (N)`, filho `Ln X (N)`.
+  - **Codes**: nó raiz `código (N)`, filho `Ln X` com `chain` na description apenas quando aplicável; `not in ontology` preservado no tooltip do nó raiz.
+  - **Relations**: nó raiz `RELAÇÃO (N)`, filho `A → B` com `Ln X` na description.
+  - **Ontology Topics**: nó pai `tópico (N)`, nó folha `conceito Ln X`.
+  - **Ontology Annotations**: nó raiz `código (N) · Ln X` (quando definido na ontologia) ou `(N) · not in ontology`, filho `Ln X` com `chain` quando aplicável.
+- **Codes — `usageCount` corrigido**: contagem reflete ocorrências individuais; ordenação primária alfabética, secundária por frequência decrescente.
+
 ## [0.5.26] - 2026-03-26
 
 ### Changed

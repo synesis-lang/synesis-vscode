@@ -168,8 +168,7 @@ class RelationTreeItem extends vscode.TreeItem {
 
         this.relation = relation;
         this.triplets = triplets;
-        const n = triplets.length;
-        this.description = n === 1 ? '1 chain' : `${n} chains`;
+        this.description = `(${triplets.length})`;
         this.iconPath = new vscode.ThemeIcon('link');
         this.contextValue = 'relation';
     }
@@ -181,22 +180,20 @@ class TripletTreeItem extends vscode.TreeItem {
 
         super(label, vscode.TreeItemCollapsibleState.None);
 
-        if (!triplet.file) {
-            this.description = triplet.type || '';
-        } else {
-            const path = require('path');
-            const fileName = path.basename(triplet.file);
+        if (triplet.file) {
             const lineLabel = typeof triplet.line === 'number' && triplet.line >= 0
                 ? triplet.line + 1
                 : '?';
-            this.description = `${fileName}:${lineLabel}`;
+            this.description = `Ln ${lineLabel}`;
+            this.tooltip = triplet.file;
+        } else {
+            this.description = '';
+            this.tooltip = '<location not available>';
         }
 
         this.iconPath = new vscode.ThemeIcon(triplet.file ? 'file' : 'question');
-        this.tooltip = triplet.file || '<location not available>';
         this.contextValue = 'relationTriplet';
 
-        // Só adicionar comando se file existir
         if (triplet.file) {
             this.command = {
                 command: 'synesis.openLocation',

@@ -213,20 +213,18 @@ class TopicTreeItem extends vscode.TreeItem {
 
         if (children.length > 0) {
             this.iconPath = new vscode.ThemeIcon('tag');
-            const n = children.length;
-            this.description = n === 1 ? '1 concept' : `${n} concepts`;
+            this.description = `(${children.length})`;
         } else {
             this.iconPath = new vscode.ThemeIcon('pin');
+            if (topic.file) {
+                const lineLabel = typeof topic.line === 'number' && topic.line >= 0
+                    ? topic.line + 1
+                    : '?';
+                this.description = `Ln ${lineLabel}`;
+            }
         }
 
         if (topic.file) {
-            const fileName = path.basename(topic.file);
-            const lineLabel = typeof topic.line === 'number' && topic.line >= 0
-                ? topic.line + 1
-                : '?';
-            if (children.length === 0) {
-                this.description = `${fileName}:${lineLabel}`;
-            }
             this.tooltip = topic.file;
             this.command = {
                 command: 'synesis.openLocation',

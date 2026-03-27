@@ -187,14 +187,10 @@ class ReferenceTreeItem extends vscode.TreeItem {
         this.bibref = bibref;
         this.occurrences = occurrences;
 
-        const filesLabel = occurrenceCount === 1 ? '1 file' : `${occurrenceCount} files`;
-        const itemsLabel = itemCount === 1 ? '1 item' : `${itemCount} items`;
-        this.description = `${itemsLabel} in ${filesLabel}`;
+        this.description = `(${itemCount})`;
         this.iconPath = new vscode.ThemeIcon('book');
         this.contextValue = 'reference';
-        if (title) {
-            this.tooltip = title;
-        }
+        this.tooltip = title || bibref;
     }
 }
 
@@ -203,21 +199,18 @@ class ReferenceTreeItem extends vscode.TreeItem {
  */
 class OccurrenceTreeItem extends vscode.TreeItem {
     constructor(occurrence) {
-        const fileName = path.basename(occurrence.file);
         const lineLabel = typeof occurrence.line === 'number' && occurrence.line >= 0
             ? occurrence.line + 1
             : '?';
-        const label = `${fileName}:${lineLabel}`;
 
-        super(label, vscode.TreeItemCollapsibleState.None);
+        super(`Ln ${lineLabel}`, vscode.TreeItemCollapsibleState.None);
 
         const n = occurrence.itemCount;
-        this.description = n === 1 ? '1 item' : `${n} items`;
+        this.description = `(${n})`;
         this.iconPath = new vscode.ThemeIcon('file');
         this.tooltip = occurrence.file;
         this.contextValue = 'occurrence';
 
-        // Comando para navegação
         this.command = {
             command: 'synesis.openLocation',
             title: 'Open Location',

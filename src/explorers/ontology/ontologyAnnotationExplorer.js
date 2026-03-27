@@ -9,7 +9,6 @@
  *     - DataService: LSP-only data access
  */
 
-const path = require('path');
 const vscode = require('vscode');
 
 class OntologyAnnotationExplorer {
@@ -191,37 +190,32 @@ class AnnotationTreeItem extends vscode.TreeItem {
         this.iconPath = new vscode.ThemeIcon(data.ontologyDefined ? 'symbol-key' : 'symbol-variable');
 
         const n = occurrences.length;
-        const usesLabel = n === 1 ? '1 use' : `${n} uses`;
 
         if (data.ontologyDefined && data.ontologyFile) {
-            const fileName = path.basename(data.ontologyFile);
             const lineLabel = typeof data.ontologyLine === 'number' && data.ontologyLine >= 0
                 ? data.ontologyLine + 1
                 : '?';
-            this.description = `${usesLabel} · ${fileName}:${lineLabel}`;
+            this.description = `(${n}) · Ln ${lineLabel}`;
             this.tooltip = data.ontologyFile;
         } else if (!data.ontologyDefined) {
-            this.description = `${usesLabel} · not in ontology`;
+            this.description = `(${n}) · not in ontology`;
         } else {
-            this.description = usesLabel;
+            this.description = `(${n})`;
         }
     }
 }
 
 class OccurrenceTreeItem extends vscode.TreeItem {
     constructor(occurrence) {
-        const fileName = occurrence.file ? path.basename(occurrence.file) : '<unknown file>';
         const lineLabel = typeof occurrence.line === 'number' && occurrence.line >= 0
             ? occurrence.line + 1
             : '?';
-        const label = `${fileName}:${lineLabel}`;
 
-        super(label, vscode.TreeItemCollapsibleState.None);
+        super(`Ln ${lineLabel}`, vscode.TreeItemCollapsibleState.None);
 
-        const ctx = occurrence.context || 'code';
-        const fld = occurrence.field || '';
-        const ctxLabel = ctx === 'code' ? 'code field' : ctx;
-        this.description = fld && fld !== ctx ? `${ctxLabel} · ${fld}` : ctxLabel;
+        const ctx = (occurrence.context || 'code').toLowerCase();
+        const fld = (occurrence.field || '').toLowerCase();
+        this.description = (ctx === 'chain' || fld === 'chain') ? 'chain' : '';
         this.iconPath = new vscode.ThemeIcon(occurrence.file ? 'file' : 'question');
         this.tooltip = occurrence.file || '<location not available>';
         this.contextValue = 'ontologyAnnotationOccurrence';
