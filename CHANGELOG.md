@@ -5,6 +5,15 @@ All notable changes to the Synesis Explorer extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.28] - 2026-04-01
+
+### Fixed
+- **Synesis Coder — encoding UTF-8 no Windows** (`src/services/coderService.js`)
+  - `execFile` agora injeta `PYTHONUTF8=1` e `PYTHONIOENCODING=utf-8` no
+    ambiente do processo filho, garantindo que o Python escreva stdout em UTF-8
+    mesmo em sistemas com code page cp1252 — corrige corrupção de acentos em
+    textos em português retornados pelo `synesis-coder item`
+
 ## [0.5.27] - 2026-03-26
 
 ### Changed

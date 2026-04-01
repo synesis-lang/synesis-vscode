@@ -2,7 +2,7 @@
   "name": "synesis-explorer",
   "displayName": "Synesis Explorer",
   "description": "VSCode extension for exploring Synesis knowledge synthesis files",
-  "version": "0.5.27",
+  "version": "0.5.28",
   "publisher": "synesis",
   "repository": {
     "type": "git",

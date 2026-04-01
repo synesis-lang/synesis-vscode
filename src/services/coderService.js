@@ -226,7 +226,12 @@ class CoderService {
                 {
                     timeout: 120000,
                     maxBuffer: 1024 * 1024,
-                    encoding: 'utf-8'
+                    encoding: 'utf-8',
+                    env: {
+                        ...process.env,
+                        PYTHONUTF8: '1',
+                        PYTHONIOENCODING: 'utf-8',
+                    }
                 },
                 (error, stdout, stderr) => {
                     if (error) {
