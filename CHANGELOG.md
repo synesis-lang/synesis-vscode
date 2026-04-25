@@ -5,6 +5,16 @@ All notable changes to the Synesis Explorer extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.29] - 2026-04-25
+
+### Added
+- **Suporte a `.synr` (formato de revisão do pipeline ACT)** (`package.json`)
+  - A extensão `.synr` foi adicionada à lista de extensões da linguagem `synesis`.
+  - Arquivos `.synr` recebem syntax highlighting, semantic tokens e associação de ícone idênticos aos arquivos `.syn` — o formato é sintaticamente compatível (comentários `# REVISION` e `# $key: value` são reconhecidos como `comment.line.synesis`).
+  - Nenhuma mudança no atalho Ctrl+Shift+I (`synesis-coder item`) — contrato com a extensão inalterado.
+
+---
+
 ## [0.5.28] - 2026-04-01
 
 ### Fixed
