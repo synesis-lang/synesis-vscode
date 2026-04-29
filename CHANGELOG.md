@@ -5,6 +5,17 @@ All notable changes to the Synesis Explorer extension will be documented in this
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.30] - 2026-04-29
+
+### Fixed
+- **Zoom do Graph Viewer** (`src/viewers/graphViewer.js`)
+  - Causa raiz: o `<script>` do webview não tinha atributo `nonce`, fazendo a CSP (`script-src 'nonce-{nonce}'`) bloquear silenciosamente todo o JavaScript customizado — botões +/−/Reset e scroll wheel não respondiam.
+  - Atributo `nonce="${nonce}"` adicionado ao `<script>` tag principal.
+  - Atributos `onclick="..."` substituídos por `id` nos três botões + `addEventListener` no script — inline event handlers são bloqueados por CSP mesmo com nonce.
+  - `svg.getBBox()` envolvido em `requestAnimationFrame` para garantir que o SVG esteja pintado antes da leitura de dimensões no auto-fit inicial; guard `svgWidth > 0 && svgHeight > 0` adicionado para evitar cálculo com dimensões nulas.
+
+---
+
 ## [0.5.29] - 2026-04-25
 
 ### Added

@@ -282,14 +282,14 @@ class GraphViewer {
             <p>Reference: <strong>${escapeHtml(reference)}</strong></p>
         </div>
         <div class="zoom-controls">
-            <button class="zoom-btn" onclick="zoomOut()" title="Zoom out">
+            <button class="zoom-btn" id="btnZoomOut" title="Zoom out">
                 <span>-</span>
             </button>
             <span class="zoom-level" id="zoomLevel">100%</span>
-            <button class="zoom-btn" onclick="zoomIn()" title="Zoom in">
+            <button class="zoom-btn" id="btnZoomIn" title="Zoom in">
                 <span>+</span>
             </button>
-            <button class="zoom-btn" onclick="resetZoom()" title="Reset zoom">
+            <button class="zoom-btn" id="btnReset" title="Reset zoom">
                 <span>Reset</span>
             </button>
         </div>
@@ -303,7 +303,11 @@ ${mermaidCode}
         </div>
     </div>
 
-    <script>
+    <script nonce="${nonce}">
+        document.getElementById('btnZoomOut').addEventListener('click', zoomOut);
+        document.getElementById('btnZoomIn').addEventListener('click', zoomIn);
+        document.getElementById('btnReset').addEventListener('click', resetZoom);
+
         let currentZoom = 1.0;
         const zoomStep = 0.15;
         const minZoom = 0.25;
@@ -375,24 +379,29 @@ ${mermaidCode}
 
             mermaid.run({ nodes: [document.getElementById('mermaidContent')] })
                 .then(() => {
-                    const wrapper = document.getElementById('mermaidWrapper');
-                    const content = document.getElementById('mermaidContent');
-                    const svg = content.querySelector('svg');
+                    requestAnimationFrame(() => {
+                        const wrapper = document.getElementById('mermaidWrapper');
+                        const content = document.getElementById('mermaidContent');
+                        const svg = content ? content.querySelector('svg') : null;
 
-                    if (svg && wrapper) {
-                        const wrapperWidth = wrapper.clientWidth - 40;
-                        const wrapperHeight = wrapper.clientHeight - 40;
-                        const svgWidth = svg.getBBox().width;
-                        const svgHeight = svg.getBBox().height;
+                        if (svg && wrapper) {
+                            const wrapperWidth = wrapper.clientWidth - 40;
+                            const wrapperHeight = wrapper.clientHeight - 40;
+                            const bbox = svg.getBBox();
+                            const svgWidth = bbox.width;
+                            const svgHeight = bbox.height;
 
-                        const scaleX = wrapperWidth / svgWidth;
-                        const scaleY = wrapperHeight / svgHeight;
-                        const initialScale = Math.min(scaleX, scaleY, 1.0);
+                            if (svgWidth > 0 && svgHeight > 0) {
+                                const scaleX = wrapperWidth / svgWidth;
+                                const scaleY = wrapperHeight / svgHeight;
+                                const initialScale = Math.min(scaleX, scaleY, 1.0);
 
-                        if (initialScale < 1.0) {
-                            updateZoom(initialScale);
+                                if (initialScale < 1.0) {
+                                    updateZoom(initialScale);
+                                }
+                            }
                         }
-                    }
+                    });
                 })
                 .catch(function(err) {
                     document.getElementById('mermaidContent').innerHTML =
