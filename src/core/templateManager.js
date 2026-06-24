@@ -27,6 +27,7 @@
 const vscode = require('vscode');
 const projectLoader = require('./projectLoader');
 const templateParser = require('../parsers/templateParser');
+// templateParser é fallback transitório enquanto synesis/getTemplate não estiver disponível
 
 const DEFAULT_FIELDS = {
     code: { type: 'CODE', scope: 'ITEM' },
@@ -45,6 +46,15 @@ class TemplateManager {
     constructor() {
         this.cache = new Map();
         this.cacheInfo = new Map();
+        this._dataService = null;
+    }
+
+    /**
+     * Injeta dataService após construção (evita dependência circular na inicialização).
+     * @param {import('../services/dataService')} dataService
+     */
+    setDataService(dataService) {
+        this._dataService = dataService;
     }
 
     /**
@@ -70,8 +80,30 @@ class TemplateManager {
             return this.cache.get(key);
         }
 
+        // Caminho primário: LSP (sem regex de gramática, inclui bundles/optional_bundles)
+        if (this._dataService) {
+            try {
+                const lspTemplate = await this._dataService.getTemplate();
+                if (lspTemplate && Array.isArray(lspTemplate.fields) && lspTemplate.fields.length > 0) {
+                    console.log(`Template loaded from LSP for: ${key}`);
+                    const registry = this.buildFieldRegistry(lspTemplate);
+                    this._setCacheInfo(key, {
+                        fromTemplate: true,
+                        fromLsp: true,
+                        hasChainFields: this._hasChainFields(lspTemplate),
+                        hasTopicFields: this._hasTopicFields(lspTemplate)
+                    });
+                    this.cache.set(key, registry);
+                    return registry;
+                }
+            } catch (lspError) {
+                console.warn('TemplateManager: LSP getTemplate failed, falling back to local parser:', lspError.message);
+            }
+        }
+
+        // Fallback: parser local (transitório — removido quando synesis/getTemplate estiver estável)
         try {
-            console.log(`Loading template for project: ${key}`);
+            console.log(`Loading template from file for: ${key}`);
             const project = await projectLoader.load(projectUri);
 
             if (!project.templatePath) {
@@ -93,6 +125,7 @@ class TemplateManager {
 
             this._setCacheInfo(key, {
                 fromTemplate: true,
+                fromLsp: false,
                 hasChainFields: this._hasChainFields(template),
                 hasTopicFields: this._hasTopicFields(template)
             });

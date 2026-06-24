@@ -16,7 +16,8 @@
     "enumMember": { "foreground": "#2ac3de" },
     "namespace": { "foreground": "#bb9af7", "fontStyle": "bold" },
     "comment": { "foreground": "#565f89", "fontStyle": "italic" },
-    "operator": { "foreground": "#565f89" }
+    "operator": { "foreground": "#565f89" },
+    "type": { "foreground": "#f7768e", "fontStyle": "bold" }
   },
   "tokenColors": [
     {

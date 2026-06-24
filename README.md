@@ -1,127 +1,99 @@
-# Synesis Explorer
+# Synesis
 
-> **Visual navigation and LSP-powered editing for Synesis projects.**
+> **Visual navigation and assisted editing for Synesis projects in Visual Studio Code.**
 
-Synesis Explorer is a Visual Studio Code extension for working with Synesis files (`.syn`, `.synp`, `.synt`, `.syno`). It provides tree views for references, codes, relations, and ontologies, plus LSP-backed editor features such as diagnostics, rename, and go-to-definition.
+Synesis is a VS Code extension for working with Synesis files (`.syn`, `.synp`, `.synt`, `.syno`). It provides navigation panels for bibliographic references, codes, relations, ontologies, and template fields, along with real-time diagnostics as you write.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![VSCode >=1.60](https://img.shields.io/badge/VSCode-%3E%3D1.60.0-blue.svg)](https://code.visualstudio.com/)
 
-## Overview
+---
 
-Synesis Explorer is the UX layer of the Synesis ecosystem. It connects to Synesis LSP to provide reliable, template-driven data and navigation across your project.
+## What is Synesis
 
-## Features
+Synesis is the visual interface of the Synesis ecosystem. It connects to the Synesis compiler to display, in real time, the data from your qualitative research project: bibliographic references, analytical codes, causal relations (chains), ontology topics, and ontology annotations.
 
-- Tree explorers for References, Codes, Relations, Ontology Topics, and Ontology Annotations
-- LSP-only data access (no regex fallback)
-- Real-time diagnostics and semantic tokens
-- Hover, completion, inlay hints, and document symbols
-- Go-to-definition for bibrefs and ontology codes
-- Rename with F2 (codes and references)
-- Relation graph viewer (Mermaid)
-- Abstract viewer (BibTeX abstracts with highlights)
-- Synesis Dark and Light themes
-- Custom file icons for Synesis extensions
+Everything is derived directly from your template (`.synt`) and annotation files (`.syn`, `.syno`) — no manual field configuration required.
 
-## Requirements
-
-- VSCode 1.60+
-- Synesis LSP v0.13.0+ installed and on PATH
-- Synesis compiler installed (required by the LSP)
+---
 
 ## Installation
 
-### From VSIX
+### Prerequisites
 
-1. Download the `.vsix` from the release page:
-   - `https://github.com/synesis-lang/synesis-explorer/releases`
-2. In VSCode: `Ctrl+Shift+P` → "Extensions: Install from VSIX..."
+Install the Synesis compiler and language server via terminal:
 
-### From Source
-
-```bash
-git clone https://github.com/synesis-lang/synesis-explorer.git
-cd synesis-explorer
-npm install
-npm run build
+```
+pip install synesis synesis-lsp
 ```
 
-Press `F5` to open the Extension Development Host.
+### Install the extension
+
+1. Download the `.vsix` file from the [releases page](https://github.com/synesis-lang/synesis-vscode/releases).
+2. In VS Code: `Ctrl+Shift+P` → "Extensions: Install from VSIX..." → select the downloaded file.
+
+---
 
 ## Quick Start
 
-1. Open a workspace that contains a `.synp` file.
-2. Ensure `synesis-lsp` is installed and available.
-3. Open the Synesis Explorer view from the Activity Bar.
-4. Use the tree views to navigate references, codes, and relations.
+1. Open a folder containing a `.synp` file (Synesis project) in VS Code.
+2. Click the Synesis icon in the left sidebar.
+3. The panels will be populated automatically with your project data.
 
-## Configuration
+---
 
-Configure the LSP executable and arguments in VSCode settings:
+## Sidebar Panels
 
-```json
-{
-  "synesisExplorer.lsp.pythonPath": "synesis-lsp",
-  "synesisExplorer.lsp.args": []
-}
-```
+The extension adds a sidebar with six panels:
 
-If you need to run the LSP as a Python module:
+| Panel | What it shows |
+|-------|---------------|
+| **References** | All bibliographic sources in the project (`SOURCE`), with their annotation items nested below |
+| **Codes** | All analytical codes used in the annotations, with occurrences listed per file |
+| **Relations** | Causal relations (`CHAIN`) declared in items, grouped by source |
+| **Ontology Topics** | Topics defined in ontology files (`.syno`) |
+| **Ontology Annotations** | Usage of ontology topics across `.syn` annotation files |
+| **Template Fields** | Fields defined in the project template (`.synt`), grouped by scope (SOURCE / ITEM / ONTOLOGY) |
 
-```json
-{
-  "synesisExplorer.lsp.pythonPath": "python",
-  "synesisExplorer.lsp.args": ["-m", "synesis_lsp"]
-}
-```
+Clicking any item in a panel opens the corresponding file and positions the cursor at the exact line.
+
+---
 
 ## Commands and Shortcuts
 
-| Command | Shortcut | Description |
-|---------|----------|-------------|
-| `Synesis: Show Relation Graph` | `Ctrl+Alt+G` | Open relation graph viewer |
-| `Synesis: Show Abstract` | `Ctrl+Shift+A` | Open abstract viewer |
-| `Synesis: LSP Load Project` | — | Reload project in LSP |
-| `Rename Code` | `F2` | Rename selected code in Codes Explorer |
-| `Rename Reference` | `F2` | Rename selected reference in References Explorer |
+| Shortcut | Command | Description |
+|----------|---------|-------------|
+| `Ctrl+Alt+G` | Synesis: Show Relation Graph | Opens the relation graph for the entire project |
+| `Ctrl+Alt+F` | Synesis: Show Relation Graph per File | Opens the relation graph for the active file |
+| `Ctrl+Alt+I` | Synesis: Show Relation Graph per Item | Opens the graph for the item under the cursor |
+| `Ctrl+Shift+A` | Synesis: Show Abstract | Displays the bibliographic abstract for the active reference |
+| `F2` (in panel) | Rename Code / Rename Reference | Renames a code or reference across the entire project |
 
-Context menus:
-- Codes Explorer: Go to Definition
-- References Explorer: Rename Reference
+The relation graph is interactive: you can zoom in and out and navigate through the nodes.
 
-## Project Structure
+Context menus are available in the **Codes** panel (go to definition) and the **References** panel (rename reference).
 
-```
-synesis-explorer/
-├── extension.js           # Entry point
-├── src/
-│   ├── core/              # Workspace + template handling
-│   ├── lsp/               # LSP client wrapper
-│   ├── services/          # DataService (LSP-only)
-│   ├── explorers/         # Tree view providers
-│   ├── viewers/           # Graph + abstract viewers
-│   └── utils/             # Shared utilities
-├── syntaxes/              # TextMate grammars
-├── themes/                # Color themes
-├── icons/                 # File icons
-└── test/                  # Extension tests
-```
+---
 
-## Development
+## Real-Time Diagnostics
 
-```bash
-npm run build
-npm run test
-npm run package
-```
+While editing `.syn` and `.syno` files, the extension displays underlines and error messages directly in the editor — missing required fields, invalid bibliographic references, codes not defined in the template, and more. Errors also appear in the VS Code **Problems** panel (`Ctrl+Shift+M`).
 
-The build outputs to `dist/`.
+---
+
+## Themes
+
+The extension includes two visual themes optimized for Synesis files:
+
+- **Synesis Dark**
+- **Synesis Light**
+
+To activate: `Ctrl+Shift+P` → "Preferences: Color Theme" → select the desired theme.
+
+---
 
 ## License
 
-MIT License - Synesis Project.
+MIT License — Christian Maciel De Britto.
 
-## Changelog
-
-See [CHANGELOG.md](CHANGELOG.md) for release history.
+See [CHANGELOG.md](CHANGELOG.md) for the version history.

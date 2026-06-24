@@ -1,5 +1,5 @@
 /**
- * extension.js - Entry point for Synesis Explorer VSCode extension
+ * extension.js - Entry point for Synesis VSCode extension
  *
  * Propósito:
  *     Registra explorers, viewers, comandos e file watchers.
@@ -36,6 +36,7 @@ const CodeExplorer = require('./src/explorers/code/codeExplorer');
 const RelationExplorer = require('./src/explorers/relation/relationExplorer');
 const OntologyExplorer = require('./src/explorers/ontology/ontologyExplorer');
 const OntologyAnnotationExplorer = require('./src/explorers/ontology/ontologyAnnotationExplorer');
+const { TemplateExplorer, goToField } = require('./src/explorers/template/templateExplorer');
 
 // Viewers
 const GraphViewer = require('./src/viewers/graphViewer');
@@ -96,7 +97,7 @@ const SYNESIS_CUSTOM_METHODS = [
  * @param {vscode.ExtensionContext} context
  */
 function activate(context) {
-    console.log('Synesis Explorer is now active');
+    console.log('Synesis is now active');
     vscode.commands.executeCommand('setContext', 'synesis.hasCodes', false);
     vscode.commands.executeCommand('setContext', 'synesis.hasChains', false);
     vscode.commands.executeCommand('setContext', 'synesis.hasTopics', false);
@@ -129,14 +130,17 @@ function activate(context) {
     const templateManager = new TemplateManager();
     const workspaceScanner = new WorkspaceScanner();
 
-    // Coder service (synesis-coder CLI integration)
-    const coderService = new CoderService(workspaceScanner);
-
-    // DataService (LSP-only adapter)
+    // DataService (LSP-only adapter) — criado antes do CoderService para injeção
     dataService = new DataService({
         lspClient: lspClient || null,
         onLspIncompatible: () => setLspStatus('incompatible')
     });
+
+    // Coder service (synesis-coder CLI integration)
+    const coderService = new CoderService(workspaceScanner, dataService);
+
+    // Injetar dataService no templateManager (após criação do DataService)
+    templateManager.setDataService(dataService);
 
     // Initialize Reference Explorer
     const referenceExplorer = new ReferenceExplorer(dataService);
@@ -174,6 +178,12 @@ function activate(context) {
     });
     ontologyAnnotationExplorer._treeView = ontologyAnnotationTreeView;
 
+    const templateExplorer = new TemplateExplorer(dataService);
+    const templateTreeView = vscode.window.createTreeView('synesisTemplateExplorer', {
+        treeDataProvider: templateExplorer,
+    });
+    templateExplorer._treeView = templateTreeView;
+
     const abstractViewer = new AbstractViewer(workspaceScanner, templateManager, dataService);
     const graphViewer = new GraphViewer(dataService, context.extensionUri);
 
@@ -184,6 +194,7 @@ function activate(context) {
         relationExplorer.refresh();
         ontologyExplorer.refresh();
         ontologyAnnotationExplorer.refresh();
+        templateExplorer.refresh();
     };
 
     // Debounce factory — each caller gets an independent timer (no cross-cancellation)
@@ -545,6 +556,30 @@ function activate(context) {
     );
 
     context.subscriptions.push(
+        vscode.commands.registerCommand('synesis.showGraphPerFile', () => {
+            graphViewer.showGraphForFile();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('synesis.showGraphPerItem', () => {
+            graphViewer.showGraphForItem();
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('synesis.template.goToField', async (fieldName) => {
+            await goToField(fieldName);
+        })
+    );
+
+    context.subscriptions.push(
+        vscode.commands.registerCommand('synesis.template.refresh', () => {
+            templateExplorer.refresh();
+        })
+    );
+
+    context.subscriptions.push(
         vscode.commands.registerCommand('synesis.openLocation', (filePath, line, column) => {
             openLocation(filePath, line, column);
         })
@@ -843,7 +878,7 @@ async function renameSymbol(treeItem, symbolKey, promptMessage) {
 }
 
 function deactivate() {
-    console.log('Synesis Explorer is now deactivated');
+    console.log('Synesis is now deactivated');
     if (lspClient) {
         lspClient.stop();
         lspClient = undefined;

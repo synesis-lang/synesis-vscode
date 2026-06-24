@@ -11,34 +11,42 @@ dist/
 # VSCode test folder
 .vscode-test/
 
+# Credentials — NEVER commit
+.env
+.env.local
+.env.*.local
+*.key
+*_api_token.txt
+
 # OS files
 .DS_Store
 Thumbs.db
+Desktop.ini
+nul
 
 # Logs
 *.log
 npm-debug.log*
 
-# Environment files
-.env
-.env.local
-.env.*.local
-
 # IDE
 .idea/
+*.swp
+*.swo
+*~
 
 # Temporary files
 *.tmp
 *.temp
-*.swp
-*~
 
 # Coverage
 coverage/
 .nyc_output/
-nul
+
+# Tool indexes
 .gitnexus
 .claude
+
+# Local docs
 CLAUDE.md
 AGENTS.md
 synesis-explorer-performance-plan.md

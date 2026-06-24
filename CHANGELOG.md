@@ -1,9 +1,78 @@
 # Changelog
 
-All notable changes to the Synesis Explorer extension will be documented in this file.
+All notable changes to the Synesis extension will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.6.1] - 2026-06-23
+
+### Changed
+
+- README translated to English and rewritten for qualitative researchers.
+
+## [0.6.0] - 2026-06-22
+
+### Fixed
+
+- **Zoom out corta a borda esquerda do grafo** (`src/viewers/graphViewer.js`)
+  - `updateZoom` agora reseta `scrollLeft`/`scrollTop` do wrapper após cada redimensionamento do SVG.
+  - Antes: ao fazer zoom-out depois de rolar para a direita, a borda esquerda ficava fora da área visível.
+
+- **Título do grafo por item mostra arquivo e linha** (`src/viewers/graphViewer.js`)
+  - Painel exibe `Item: @bibref L<linha> (<arquivo.syn>)` em vez de `Item: @bibref #N` — facilita verificar se o item correto está sendo consultado.
+
+- **Show Relation Graph per Item — "No ITEM block found"** (`src/viewers/graphViewer.js`)
+  - `_extractItemInfoFromSymbols`: ITEMs filhos de um SOURCE são nomeados `"ITEM #N"` pelo LSP (sem bibref). A função agora sobe o stack de símbolos para encontrar o símbolo pai `SOURCE @bibref` e extrai o bibref de lá.
+  - Antes: grafo por item nunca funcionava em arquivos que contivessem um bloco `SOURCE`.
+
+- **Show Relation Graph per File — "Sem relações no arquivo"** (`synesis-lsp/synesis_lsp/graph.py`)
+  - Fix no servidor LSP: `_triples_for_file` agora verifica também `item.location.file`, não apenas `source.location.file`. Requer synesis-lsp com a correção correspondente.
+
+- **Zoom do Graph Viewer não enquadra o grafo corretamente** (`src/viewers/graphViewer.js`)
+  - Substituída a abordagem `transform: scale()` (que não alterava o espaço lógico do layout) por redimensionamento direto via `svg.setAttribute('width'/'height')`.
+  - `naturalWidth`/`naturalHeight` extraídos do `viewBox` do SVG gerado pelo Mermaid — garante que zoom-in e zoom-out ajustam o tamanho real do SVG, permitindo scroll correto.
+  - Auto-fit inicial recalcado com a mesma lógica de `viewBox`.
+
+- **Mac keybinding — conflito `cmd+shift+i`** (`package.json`)
+  - `synesis.showGraphPerItem` no Mac mudou de `cmd+shift+i` para `cmd+alt+i`, eliminando conflito com `synesis.coder.codeSelection` (que já usava `cmd+shift+i`).
+
+### Added
+- **Show Relation Graph per File** (`Ctrl+Alt+F`) — exibe o grafo Mermaid filtrando apenas as relações do SOURCE presente no arquivo ativo; bibref resolvido via LSP document symbols
+- **Show Relation Graph per Item** (`Ctrl+Alt+I`) — exibe o grafo Mermaid filtrando apenas as relações CHAIN do ITEM sob o cursor; disponível no menu de contexto do editor e via keybinding
+- **Template Fields explorer** — nova view "Template Fields" no painel Synesis: lista campos do template compilado agrupados por escopo (SOURCE / ITEM / ONTOLOGY); clicar num campo abre o `.synt` e posiciona o cursor diretamente na declaração `FIELD`; linha de destino fornecida pelo LSP via `synesis/getTemplate` (sem regex)
+- **Comando `synesis.template.refresh`** — botão ⟳ na toolbar do Template Fields para forçar recarregamento após mudanças no template
+- **`synesis/getRelationGraph` aceita parâmetro `item`** (LSP) — filtra triples apenas pelos chains do ITEM especificado; complementar ao filtro por `bibref` (SOURCE inteiro) já existente
+- **`DataService.getRelationGraphForItem(itemBibref)`** — novo método que chama `synesis/getRelationGraph` com `{ item }` em vez de `{ bibref }`
+- **`FieldSpec.line` / `FieldSpec.column`** serializados em `synesis/getTemplate` — localizações 0-based para navegação direta sem busca textual
+- **`synesis/getBlocks` (LSP-first)** — `abstractViewer.js`, `coderService.js`: bibref detection migrada de regex local para endpoint LSP estruturado; fallback parser local mantido para quando LSP indisponível
+- **`synesis/getTemplate` (LSP-first)** — `templateManager.js`: carregamento do template migrado de `templateParser.js` (regex) para LSP; cache com flag `fromLsp: true`; fallback `templateParser` mantido como transição
+- **`DataService.getBlocks(file)`** e **`DataService.getTemplate()`** — novos métodos no `dataService.js` e `LspDataProvider`
+- **`CoderService` recebe `dataService`** — construtor estendido para injeção de dependência; `_detectBibref` e `_findInsertionPoint` agora async e LSP-first
+- **Infrastructure de testes** — harness completo com `@vscode/test-cli` + Mocha + Chai:
+  - `test:unit` — 95 testes Node puro (<1s): `positionUtils`, `fuzzyMatcher`, `mermaidUtils`, `chainParser`, `dataService` (com `LspMock`)
+  - `test:integration` — 15 testes Extension Host real (~7s): smoke de ativação + `DataService` com `vscode.workspace` real
+  - Helpers: `test/helpers/lspMock.js`, `projectBuilder.js`, `treeAssertions.js`, `vscodeMock.js`
+  - Fixtures: `test/fixtures/minimal/` (projeto Synesis mínimo válido)
+  - Configuração: `.vscode-test.mjs`
+
+### Changed
+- **`extension.js`** — ordem de inicialização restruturada: `dataService` criado antes de `coderService`; `templateManager.setDataService(dataService)` injetado na ativação
+- **`abstractViewer.js`** — `_findBibref` e `showAbstract` tornados async; helper `_bibrefFromBlocks` extraído como função de módulo
+- **`coderService.js`** — `_detectBibref`, `_findInsertionPoint` e `codeSelection` tornados async; helper `_bibrefFromLspBlocks` extraído como função de módulo
+- **`templateManager.js`** — adicionados `_dataService`, `setDataService()`, tentativa LSP-first em `loadTemplate()`
+- **Scripts `package.json`**: `"test"` agora executa `test:unit && test:integration`; adicionados `test:unit`, `test:integration` (`vscode-test`), `test:watch`
+- **`publisher`**: corrigido de `"synesis"` para `"synesis-lang"` em preparação para publicação no Marketplace
+
+### Removed
+- **`src/parsers/ontologyParser.js`** — código morto (zero consumidores confirmados por grep)
+- **`test/runTest.js`** e **`test/suite/index.js`** — substituídos pelo harness `@vscode/test-cli`
+- **`@vscode/test-electron`** como dependência direta (mantido implicitamente via `@vscode/test-cli`)
+
+### Requires
+- `synesis-lsp >= 0.16.0` (endpoints `synesis/getBlocks` e `synesis/getTemplate`)
+
+---
 
 ## [0.5.30] - 2026-04-29
 
@@ -561,8 +630,8 @@ None - all changes are backward compatible
 
 ---
 
-[0.4.0]: https://github.com/your-username/synesis-explorer/releases/tag/v0.4.0
-[0.4.1]: https://github.com/your-username/synesis-explorer/releases/tag/v0.4.1
-[0.3.0]: https://github.com/your-username/synesis-explorer/releases/tag/v0.3.0
-[0.2.0]: https://github.com/your-username/synesis-explorer/releases/tag/v0.2.0
-[0.1.0]: https://github.com/your-username/synesis-explorer/releases/tag/v0.1.0
+[0.4.0]: https://github.com/synesis-lang/synesis-vscode/releases/tag/v0.4.0
+[0.4.1]: https://github.com/synesis-lang/synesis-vscode/releases/tag/v0.4.1
+[0.3.0]: https://github.com/synesis-lang/synesis-vscode/releases/tag/v0.3.0
+[0.2.0]: https://github.com/synesis-lang/synesis-vscode/releases/tag/v0.2.0
+[0.1.0]: https://github.com/synesis-lang/synesis-vscode/releases/tag/v0.1.0

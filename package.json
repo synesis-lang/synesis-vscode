@@ -1,12 +1,14 @@
 {
-  "name": "synesis-explorer",
-  "displayName": "Synesis Explorer",
-  "description": "VSCode extension for exploring Synesis knowledge synthesis files",
-  "version": "0.5.30",
-  "publisher": "synesis",
+  "name": "synesis",
+  "displayName": "Synesis",
+  "description": "Language support for Synesis knowledge synthesis files",
+  "version": "0.6.1",
+  "publisher": "synesis-lang",
+  "author": "Christian Maciel De Britto",
+  "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/synesis-lang/synesis-explorer"
+    "url": "https://github.com/synesis-lang/synesis-vscode"
   },
   "icon": "synesis-icon.png",
   "engines": {
@@ -24,8 +26,17 @@
     "languages": [
       {
         "id": "synesis",
-        "aliases": ["Synesis", "synesis"],
-        "extensions": [".syn", ".synt", ".synp", ".syno", ".synr"],
+        "aliases": [
+          "Synesis",
+          "synesis"
+        ],
+        "extensions": [
+          ".syn",
+          ".synt",
+          ".synp",
+          ".syno",
+          ".synr"
+        ],
         "configuration": "./language-configuration.json"
       }
     ],
@@ -40,14 +51,33 @@
       {
         "language": "synesis",
         "scopes": {
-          "keyword":    ["keyword.control.block.synesis"],
-          "variable":   ["entity.name.reference.synesis"],
-          "property":   ["entity.name.tag.field.synesis"],
-          "string":     ["string.quoted.field.synesis"],
-          "enumMember": ["variable.other.code.synesis"],
-          "namespace":  ["keyword.control.block.synesis"],
-          "comment":    ["comment.line.synesis"],
-          "operator":   ["keyword.operator.arrow.synesis"]
+          "keyword": [
+            "keyword.control.block.synesis"
+          ],
+          "variable": [
+            "entity.name.reference.synesis"
+          ],
+          "property": [
+            "entity.name.tag.field.synesis"
+          ],
+          "string": [
+            "string.quoted.field.synesis"
+          ],
+          "enumMember": [
+            "variable.other.code.synesis"
+          ],
+          "namespace": [
+            "keyword.control.block.synesis"
+          ],
+          "comment": [
+            "comment.line.synesis"
+          ],
+          "operator": [
+            "keyword.operator.arrow.synesis"
+          ],
+          "type": [
+            "constant.language.relation.synesis"
+          ]
         }
       }
     ],
@@ -73,14 +103,14 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "synesis-explorer",
-          "title": "Synesis Explorer",
+          "id": "synesis",
+          "title": "Synesis",
           "icon": "synesis-icon.svg"
         }
       ]
     },
     "views": {
-      "synesis-explorer": [
+      "synesis": [
         {
           "id": "synesisReferenceExplorer",
           "name": "References"
@@ -104,6 +134,10 @@
           "id": "synesisOntologyAnnotationExplorer",
           "name": "Ontology (Annotations)",
           "when": "synesis.hasOntologyAnnotations && synesis.activeFileKind == syn"
+        },
+        {
+          "id": "synesisTemplateExplorer",
+          "name": "Template Fields"
         }
       ]
     },
@@ -204,7 +238,24 @@
       },
       {
         "command": "synesis.showGraph",
-        "title": "Synesis: Show Relation Graph"
+        "title": "Synesis: Show Relation Graph (All)"
+      },
+      {
+        "command": "synesis.showGraphPerFile",
+        "title": "Synesis: Show Relation Graph per File"
+      },
+      {
+        "command": "synesis.showGraphPerItem",
+        "title": "Synesis: Show Relation Graph per Item"
+      },
+      {
+        "command": "synesis.template.refresh",
+        "title": "Refresh Template Fields",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "synesis.template.goToField",
+        "title": "Go to Field in Template"
       },
       {
         "command": "synesis.showAbstract",
@@ -237,6 +288,18 @@
         "command": "synesis.showGraph",
         "key": "ctrl+alt+g",
         "mac": "cmd+shift+g",
+        "when": "editorTextFocus && editorLangId == synesis && synesis.hasChains"
+      },
+      {
+        "command": "synesis.showGraphPerFile",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+shift+f",
+        "when": "editorTextFocus && editorLangId == synesis && synesis.hasChains"
+      },
+      {
+        "command": "synesis.showGraphPerItem",
+        "key": "ctrl+alt+i",
+        "mac": "cmd+alt+i",
         "when": "editorTextFocus && editorLangId == synesis && synesis.hasChains"
       },
       {
@@ -343,6 +406,11 @@
           "command": "synesis.ontology.annotation.filterActive",
           "when": "view == synesisOntologyAnnotationExplorer && synesis.hasOntologyAnnotations && synesis.activeFileKind == syn && synesis.ontology.annotation.filterActive",
           "group": "navigation"
+        },
+        {
+          "command": "synesis.template.refresh",
+          "when": "view == synesisTemplateExplorer",
+          "group": "navigation"
         }
       ],
       "commandPalette": [
@@ -365,9 +433,23 @@
         {
           "command": "synesis.ontology.annotation.filterActive",
           "when": "false"
+        },
+        {
+          "command": "synesis.template.goToField",
+          "when": "false"
         }
       ],
       "editor/context": [
+        {
+          "command": "synesis.showGraphPerFile",
+          "when": "editorLangId == synesis && synesis.hasChains && synesis.activeFileKind == syn",
+          "group": "synesis@1"
+        },
+        {
+          "command": "synesis.showGraphPerItem",
+          "when": "editorLangId == synesis && synesis.hasChains && synesis.activeFileKind == syn",
+          "group": "synesis@2"
+        },
         {
           "command": "synesis.coder.codeSelection",
           "when": "editorLangId == synesis && editorHasSelection && synesis.activeFileKind == syn",
@@ -393,7 +475,7 @@
       }
     },
     "configuration": {
-      "title": "Synesis Explorer",
+      "title": "Synesis",
       "properties": {
         "synesisExplorer.lsp.enabled": {
           "type": "boolean",
@@ -444,7 +526,10 @@
   "scripts": {
     "build": "node esbuild.js",
     "build:watch": "node esbuild.js --watch",
-    "test": "node ./test/runTest.js",
+    "test": "npm run test:unit && npm run test:integration",
+    "test:unit": "mocha \"test/unit/**/*.test.js\" --timeout 5000",
+    "test:integration": "vscode-test",
+    "test:watch": "mocha \"test/unit/**/*.test.js\" --watch --timeout 5000",
     "lint": "eslint .",
     "compile": "npm run build",
     "watch": "npm run build:watch",
@@ -456,12 +541,15 @@
     "vscode-languageclient": "^9.0.0"
   },
   "devDependencies": {
-    "@types/vscode": "^1.60.0",
+    "@types/mocha": "^10.0.10",
     "@types/node": "^14.x",
-    "vsce": "^2.15.0",
-    "mocha": "^10.0.0",
+    "@types/vscode": "^1.60.0",
+    "@vscode/test-cli": "^0.0.12",
+    "@vscode/test-electron": "^3.0.0",
     "chai": "^4.3.0",
+    "esbuild": "^0.20.2",
     "eslint": "^8.0.0",
-    "esbuild": "^0.20.2"
+    "mocha": "^10.0.0",
+    "vsce": "^2.15.0"
   }
 }

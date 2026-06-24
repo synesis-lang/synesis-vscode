@@ -41,7 +41,7 @@ class AbstractViewer {
             return;
         }
 
-        const bibref = this._findBibref(editor.document, editor.selection.active);
+        const bibref = await this._findBibref(editor.document, editor.selection.active);
         if (!bibref) {
             vscode.window.showWarningMessage('No reference found. Position cursor inside a SOURCE or ITEM block.');
             return;
@@ -695,26 +695,37 @@ class AbstractViewer {
       </html>
     `;
     }
-    _findBibref(document, position) {
-        const text = document.getText();
+    async _findBibref(document, position) {
         const offset = document.offsetAt(position);
-        const filePath = document.uri.fsPath;
+        const file = document.uri.fsPath;
 
-        const items = this.parser.parseItems(text, filePath);
+        // Tenta via LSP (sem regex de gramática)
+        if (this.dataService) {
+            try {
+                const blocks = await this.dataService.getBlocks(file);
+                if (blocks && blocks.length > 0) {
+                    return _bibrefFromBlocks(blocks, document, offset);
+                }
+            } catch (err) {
+                console.warn('AbstractViewer._findBibref: LSP getBlocks failed, falling back to local parser:', err.message);
+            }
+        }
+
+        // Fallback: parser local (transitório — removido quando getBlocks estiver estável)
+        const text = document.getText();
+        const items = this.parser.parseItems(text, file);
         const item = items.find(block => offset >= block.startOffset && offset <= block.endOffset);
         if (item) {
             return item.bibref;
         }
 
-        const sources = this.parser.parseSourceBlocks(text, filePath);
+        const sources = this.parser.parseSourceBlocks(text, file);
         let last = null;
-
         for (const source of sources) {
             if (source.startOffset <= offset) {
                 last = source.bibref;
             }
         }
-
         return last;
     }
 }
@@ -909,6 +920,38 @@ function escapeHtml(text) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+/**
+ * Resolve bibref a partir de blocos LSP e posição do cursor.
+ * Espelha a lógica de coderService._detectBibref mas sobre ranges LSP.
+ *
+ * @param {Array<{kind,bibref,range}>} blocks
+ * @param {vscode.TextDocument} document
+ * @param {number} cursorOffset
+ * @returns {string|null}
+ */
+function _bibrefFromBlocks(blocks, document, cursorOffset) {
+    let lastBefore = null;
+
+    for (const block of blocks) {
+        const startOffset = document.offsetAt(
+            new vscode.Position(block.range.start.line, block.range.start.character)
+        );
+        const endOffset = document.offsetAt(
+            new vscode.Position(block.range.end.line, block.range.end.character)
+        );
+
+        if (cursorOffset >= startOffset && cursorOffset <= endOffset) {
+            return block.bibref || null;
+        }
+
+        if (startOffset <= cursorOffset) {
+            lastBefore = block.bibref || null;
+        }
+    }
+
+    return lastBefore;
 }
 
 module.exports = AbstractViewer;

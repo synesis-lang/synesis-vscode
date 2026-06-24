@@ -175,6 +175,38 @@ class LspDataProvider {
         return { mermaidCode };
     }
 
+    async getRelationGraphForItem(workspaceRoot, itemBibref, itemLine, itemFile) {
+        const params = { workspaceRoot, item: itemBibref };
+        if (typeof itemLine === 'number') {
+            params.itemLine = itemLine;
+        }
+        if (itemFile) {
+            params.itemFile = itemFile;
+        }
+        const result = await this._sendRequestWithFallback(
+            'synesis/getRelationGraph',
+            params
+        );
+        if (!result || !result.success) {
+            return null;
+        }
+        const mermaidCode = result.mermaidCode || result.mermaid || '';
+        return { mermaidCode };
+    }
+
+    async getRelationGraphForFile(workspaceRoot, filePath) {
+        const params = { workspaceRoot, file: filePath };
+        const result = await this._sendRequestWithFallback(
+            'synesis/getRelationGraph',
+            params
+        );
+        if (!result || !result.success) {
+            return null;
+        }
+        const mermaidCode = result.mermaidCode || result.mermaid || '';
+        return { mermaidCode };
+    }
+
     async getOntologyTopics(workspaceRoot) {
         const result = await this._sendRequestWithFallback(
             'synesis/getOntologyTopics',
@@ -221,6 +253,28 @@ class LspDataProvider {
             return null;
         }
         return result.items || [];
+    }
+
+    async getBlocks(workspaceRoot, file) {
+        const result = await this._sendRequestWithFallback(
+            'synesis/getBlocks',
+            { workspaceRoot, file }
+        );
+        if (!result || !result.success) {
+            return null;
+        }
+        return result.blocks || [];
+    }
+
+    async getTemplate(workspaceRoot) {
+        const result = await this._sendRequestWithFallback(
+            'synesis/getTemplate',
+            { workspaceRoot }
+        );
+        if (!result || !result.success) {
+            return null;
+        }
+        return result.template || null;
     }
 
     async getOntologyAnnotations(workspaceRoot, activeFile) {
@@ -318,6 +372,14 @@ class DataService {
         return this._callLsp('getRelationGraph', bibref);
     }
 
+    async getRelationGraphForItem(itemBibref, itemLine, itemFile) {
+        return this._callLsp('getRelationGraphForItem', itemBibref, itemLine, itemFile);
+    }
+
+    async getRelationGraphForFile(filePath) {
+        return this._callLsp('getRelationGraphForFile', filePath);
+    }
+
     async getOntologyTopics() {
         return this._callLsp('getOntologyTopics');
     }
@@ -328,6 +390,14 @@ class DataService {
 
     async getExcerpts(bibref) {
         return this._callLsp('getExcerpts', bibref);
+    }
+
+    async getBlocks(file) {
+        return this._callLsp('getBlocks', file);
+    }
+
+    async getTemplate() {
+        return this._callLsp('getTemplate');
     }
 
     async _callLsp(method, ...args) {
@@ -406,6 +476,8 @@ class DataService {
             case 'getRelations':
                 return 'synesis/getRelations';
             case 'getRelationGraph':
+            case 'getRelationGraphForItem':
+            case 'getRelationGraphForFile':
                 return 'synesis/getRelationGraph';
             case 'getOntologyTopics':
                 return 'synesis/getOntologyTopics';
@@ -413,6 +485,10 @@ class DataService {
                 return 'synesis/getOntologyAnnotations';
             case 'getExcerpts':
                 return 'synesis/getExcerpts';
+            case 'getBlocks':
+                return 'synesis/getBlocks';
+            case 'getTemplate':
+                return 'synesis/getTemplate';
             default:
                 return method;
         }
@@ -427,8 +503,14 @@ class DataService {
             case 'getOntologyAnnotations':
                 return [];
             case 'getRelationGraph':
+            case 'getRelationGraphForItem':
+            case 'getRelationGraphForFile':
                 return null;
             case 'getExcerpts':
+                return null;
+            case 'getBlocks':
+                return null;
+            case 'getTemplate':
                 return null;
             default:
                 return null;

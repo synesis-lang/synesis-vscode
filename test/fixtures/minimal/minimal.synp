@@ -1,0 +1,5 @@
+PROJECT minimal
+    TEMPLATE "minimal.synt"
+    INCLUDE BIBLIOGRAPHY "minimal.bib"
+    INCLUDE ANNOTATIONS "minimal.syn"
+END PROJECT

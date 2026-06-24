@@ -1,0 +1,6 @@
+SOURCE @test2024
+END SOURCE
+
+ITEM @test2024
+    citation: Example excerpt for testing.
+END ITEM

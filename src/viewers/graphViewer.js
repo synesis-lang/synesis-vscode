@@ -29,31 +29,66 @@ class GraphViewer {
             return;
         }
 
-        console.log('GraphViewer.showGraph: Starting graph generation');
-        console.log('GraphViewer.showGraph: Document URI:', editor.document.uri.toString());
-
         const bibref = await this._findBibref(editor.document, editor.selection.active);
         if (!bibref) {
-            console.warn('GraphViewer.showGraph: No bibref found at cursor position');
             vscode.window.showWarningMessage(
                 'No reference found. Place the cursor inside a SOURCE or ITEM block.'
             );
             return;
         }
 
-        console.log('GraphViewer.showGraph: Found bibref:', bibref);
-
         const result = await this.dataService.getRelationGraph(bibref);
-        console.log('GraphViewer.showGraph: getRelationGraph result:', result);
-
         if (!result || !result.mermaidCode) {
-            console.warn('GraphViewer.showGraph: No mermaid code generated for bibref:', bibref);
             vscode.window.showWarningMessage(`No chain relations found for ${bibref}.`);
             return;
         }
 
-        console.log('GraphViewer.showGraph: Opening graph panel with mermaid code length:', result.mermaidCode.length);
-        this.showGraphPanel(bibref, result.mermaidCode);
+        this.showGraphPanel(`@${bibref}`, result.mermaidCode);
+    }
+
+    async showGraphForFile() {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('No active editor');
+            return;
+        }
+
+        const filePath = editor.document.uri.fsPath;
+        const result = await this.dataService.getRelationGraphForFile(filePath);
+        if (!result || !result.mermaidCode) {
+            vscode.window.showWarningMessage('No chain relations found for this file.');
+            return;
+        }
+
+        const fileName = filePath.split(/[\\/]/).pop();
+        this.showGraphPanel(`File: ${fileName}`, result.mermaidCode);
+    }
+
+    async showGraphForItem() {
+        const editor = vscode.window.activeTextEditor;
+        if (!editor) {
+            vscode.window.showWarningMessage('No active editor');
+            return;
+        }
+
+        const itemInfo = await this._findItemInfo(editor.document, editor.selection.active);
+        if (!itemInfo) {
+            vscode.window.showWarningMessage(
+                'No ITEM block found at cursor. Place the cursor inside an ITEM block.'
+            );
+            return;
+        }
+
+        const filePath = editor.document.uri.fsPath;
+        const fileName = filePath.split(/[\\/]/).pop();
+        console.log(`GraphViewer.showGraphForItem: bibref=${itemInfo.bibref} line=${itemInfo.line} file=${filePath}`);
+        const result = await this.dataService.getRelationGraphForItem(itemInfo.bibref, itemInfo.line, filePath);
+        if (!result || !result.mermaidCode) {
+            vscode.window.showWarningMessage(`No chain relations found for item @${itemInfo.bibref}.`);
+            return;
+        }
+
+        this.showGraphPanel(`Item: @${itemInfo.bibref} L${itemInfo.line + 1} (${fileName})`, result.mermaidCode);
     }
 
     showGraphPanel(reference, mermaidCode) {
@@ -231,15 +266,15 @@ class GraphViewer {
 
         .mermaid {
             padding: 20px;
-            transform-origin: center center;
-            transition: transform 0.3s ease;
-            min-width: min-content;
+            display: flex;
+            justify-content: center;
+            align-items: center;
         }
 
         .mermaid svg {
             display: block;
             max-width: none !important;
-            height: auto !important;
+            transition: width 0.2s ease, height 0.2s ease;
         }
 
         .mermaid svg .node rect,
@@ -308,50 +343,50 @@ ${mermaidCode}
         document.getElementById('btnZoomIn').addEventListener('click', zoomIn);
         document.getElementById('btnReset').addEventListener('click', resetZoom);
 
+        // naturalWidth/naturalHeight: dimensões reais do SVG gerado pelo Mermaid (px)
+        let naturalWidth = 0;
+        let naturalHeight = 0;
         let currentZoom = 1.0;
         const zoomStep = 0.15;
-        const minZoom = 0.25;
-        const maxZoom = 3.0;
+        const minZoom = 0.1;
+        const maxZoom = 4.0;
 
+        function getSvg() {
+            const content = document.getElementById('mermaidContent');
+            return content ? content.querySelector('svg') : null;
+        }
+
+        // Zoom via redimensionamento direto do SVG — o scroll container vê o tamanho real
         function updateZoom(newZoom) {
+            if (naturalWidth === 0 || naturalHeight === 0) return;
             currentZoom = Math.max(minZoom, Math.min(maxZoom, newZoom));
-            const mermaidContent = document.getElementById('mermaidContent');
-            mermaidContent.style.transform = 'scale(' + currentZoom + ')';
+            const svg = getSvg();
+            if (svg) {
+                svg.setAttribute('width', Math.round(naturalWidth * currentZoom) + 'px');
+                svg.setAttribute('height', Math.round(naturalHeight * currentZoom) + 'px');
+            }
             document.getElementById('zoomLevel').textContent = Math.round(currentZoom * 100) + '%';
+            // Reset scroll so the left edge is never cut off after resize
+            const wrapper = document.getElementById('mermaidWrapper');
+            if (wrapper) { wrapper.scrollLeft = 0; wrapper.scrollTop = 0; }
         }
 
-        function zoomIn() {
-            updateZoom(currentZoom + zoomStep);
-        }
-
-        function zoomOut() {
-            updateZoom(currentZoom - zoomStep);
-        }
-
-        function resetZoom() {
-            updateZoom(1.0);
-        }
+        function zoomIn()  { updateZoom(currentZoom + zoomStep); }
+        function zoomOut() { updateZoom(currentZoom - zoomStep); }
+        function resetZoom() { updateZoom(1.0); }
 
         document.addEventListener('keydown', (e) => {
             if (e.ctrlKey || e.metaKey) {
-                if (e.key === '+' || e.key === '=') {
-                    e.preventDefault();
-                    zoomIn();
-                } else if (e.key === '-') {
-                    e.preventDefault();
-                    zoomOut();
-                } else if (e.key === '0') {
-                    e.preventDefault();
-                    resetZoom();
-                }
+                if (e.key === '+' || e.key === '=') { e.preventDefault(); zoomIn(); }
+                else if (e.key === '-')              { e.preventDefault(); zoomOut(); }
+                else if (e.key === '0')              { e.preventDefault(); resetZoom(); }
             }
         });
 
         document.getElementById('mermaidWrapper').addEventListener('wheel', (e) => {
             if (e.ctrlKey || e.metaKey) {
                 e.preventDefault();
-                const delta = e.deltaY > 0 ? -zoomStep : zoomStep;
-                updateZoom(currentZoom + delta);
+                updateZoom(currentZoom + (e.deltaY > 0 ? -zoomStep : zoomStep));
             }
         }, { passive: false });
 
@@ -381,25 +416,41 @@ ${mermaidCode}
                 .then(() => {
                     requestAnimationFrame(() => {
                         const wrapper = document.getElementById('mermaidWrapper');
-                        const content = document.getElementById('mermaidContent');
-                        const svg = content ? content.querySelector('svg') : null;
+                        const svg = getSvg();
+                        if (!svg || !wrapper) return;
 
-                        if (svg && wrapper) {
-                            const wrapperWidth = wrapper.clientWidth - 40;
-                            const wrapperHeight = wrapper.clientHeight - 40;
+                        // Garantir viewBox presente para que redimensionamento preserve proporção
+                        if (!svg.getAttribute('viewBox')) {
                             const bbox = svg.getBBox();
-                            const svgWidth = bbox.width;
-                            const svgHeight = bbox.height;
-
-                            if (svgWidth > 0 && svgHeight > 0) {
-                                const scaleX = wrapperWidth / svgWidth;
-                                const scaleY = wrapperHeight / svgHeight;
-                                const initialScale = Math.min(scaleX, scaleY, 1.0);
-
-                                if (initialScale < 1.0) {
-                                    updateZoom(initialScale);
-                                }
+                            if (bbox.width > 0 && bbox.height > 0) {
+                                svg.setAttribute('viewBox',
+                                    bbox.x + ' ' + bbox.y + ' ' + bbox.width + ' ' + bbox.height);
                             }
+                        }
+
+                        // Capturar tamanho natural (sem padding) a partir do viewBox ou bbox
+                        const vb = svg.getAttribute('viewBox');
+                        if (vb) {
+                            const parts = vb.split(/[\s,]+/).map(Number);
+                            if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
+                                naturalWidth  = parts[2];
+                                naturalHeight = parts[3];
+                            }
+                        }
+                        if (naturalWidth === 0) {
+                            // fallback: tamanho atual do SVG
+                            naturalWidth  = svg.getBoundingClientRect().width  || svg.clientWidth  || 800;
+                            naturalHeight = svg.getBoundingClientRect().height || svg.clientHeight || 600;
+                        }
+
+                        // Auto-fit: escalar para caber no wrapper com margem de 40px
+                        const availW = wrapper.clientWidth  - 40;
+                        const availH = wrapper.clientHeight - 40;
+                        if (availW > 0 && availH > 0 && naturalWidth > 0 && naturalHeight > 0) {
+                            const fitScale = Math.min(availW / naturalWidth, availH / naturalHeight, 1.0);
+                            updateZoom(fitScale);
+                        } else {
+                            updateZoom(1.0);
                         }
                     });
                 })
@@ -421,6 +472,27 @@ ${mermaidCode}
             const mermaidPath = vscode.Uri.joinPath(this.extensionUri, 'media', 'mermaid.min.js');
             return this.panel.webview.asWebviewUri(mermaidPath).toString();
         } catch (_) {
+            return null;
+        }
+    }
+
+    async _findItemInfo(document, position) {
+        const lspReady = Boolean(this.dataService && this.dataService.lspClient && this.dataService.lspClient.isReady());
+        if (!lspReady) {
+            vscode.window.showWarningMessage('Synesis LSP is not ready. Cannot resolve item.');
+            return null;
+        }
+        try {
+            const symbols = await vscode.commands.executeCommand(
+                'vscode.executeDocumentSymbolProvider',
+                document.uri
+            );
+            if (!symbols || symbols.length === 0) {
+                return null;
+            }
+            return _extractItemInfoFromSymbols(symbols, position);
+        } catch (error) {
+            console.warn('GraphViewer._findItemInfo: Failed:', error.message);
             return null;
         }
     }
@@ -485,6 +557,43 @@ function escapeHtml(value) {
 }
 
 module.exports = GraphViewer;
+
+function _extractItemInfoFromSymbols(symbols, position) {
+    const stack = [];
+    const found = findSymbolPath(symbols, position, stack);
+    if (!found) {
+        return null;
+    }
+    // Walk stack from innermost outward, look for an ITEM-level symbol.
+    // ITEMs that are children of a SOURCE symbol are named "ITEM #N" (no bibref);
+    // the bibref lives in the parent SOURCE symbol ("SOURCE @bibref"). In that case
+    // we continue walking outward to find the SOURCE and extract the bibref from it.
+    for (let i = stack.length - 1; i >= 0; i--) {
+        const sym = stack[i];
+        const name = sym?.name || '';
+        if (/^ITEM\b/i.test(name)) {
+            // Try to get bibref from the ITEM name itself (orphan ITEM: "ITEM @bibref #N")
+            const mDirect = /@([\w._-]+)/.exec(name);
+            if (mDirect) {
+                const line = sym?.range?.start?.line ?? sym?.selectionRange?.start?.line ?? 0;
+                return { bibref: mDirect[1], line };
+            }
+            // No bibref in ITEM name — this is a child ITEM of a SOURCE.
+            // Walk further outward to find the parent SOURCE symbol.
+            const line = sym?.range?.start?.line ?? sym?.selectionRange?.start?.line ?? 0;
+            for (let j = i - 1; j >= 0; j--) {
+                const parentName = stack[j]?.name || '';
+                const mParent = /^SOURCE\s+@?([\w._-]+)/i.exec(parentName);
+                if (mParent) {
+                    return { bibref: mParent[1], line };
+                }
+            }
+            // ITEM found but no SOURCE parent in stack — cannot resolve bibref
+            return null;
+        }
+    }
+    return null;
+}
 
 function extractBibrefFromSymbols(symbols, position) {
     const stack = [];

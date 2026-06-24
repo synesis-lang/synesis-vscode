@@ -29,9 +29,11 @@ const SynesisParser = require('../parsers/synesisParser');
 class CoderService {
     /**
      * @param {import('../core/workspaceScanner')} workspaceScanner
+     * @param {import('../services/dataService')} dataService
      */
-    constructor(workspaceScanner) {
+    constructor(workspaceScanner, dataService) {
         this._workspaceScanner = workspaceScanner;
+        this._dataService = dataService || null;
         this._parser = new SynesisParser();
     }
 
@@ -60,11 +62,8 @@ class CoderService {
             return;
         }
 
-        const content = editor.document.getText();
-        const cursorOffset = editor.document.offsetAt(editor.selection.start);
-
-        // 2. Detectar bibref
-        let bibref = this._detectBibref(content, cursorOffset);
+        // 2. Detectar bibref (via LSP com fallback local)
+        let bibref = await this._detectBibref(editor);
         if (!bibref) {
             const input = await vscode.window.showInputBox({
                 prompt: 'Nenhum bloco SOURCE/ITEM encontrado. Informe o bibref (ex: smith2024)',
@@ -120,35 +119,40 @@ class CoderService {
 
     /**
      * Detecta o bibref do bloco SOURCE ou ITEM que contém o cursor.
+     * Usa LSP (getBlocks) como fonte primária; parser local como fallback transitório.
      *
-     * Algoritmo:
-     *   1. Parseia todos os blocos SOURCE e ITEM com offsets
-     *   2. Encontra o bloco que contém o cursorOffset
-     *   3. Fallback: bloco anterior mais próximo (cursor entre blocos)
-     *
-     * @param {string} content - Conteúdo completo do arquivo .syn
-     * @param {number} cursorOffset - Posição absoluta do cursor
-     * @returns {string|null} bibref sem '@', ou null se não encontrado
+     * @param {vscode.TextEditor} editor
+     * @returns {Promise<string|null>} bibref sem '@', ou null se não encontrado
      */
-    _detectBibref(content, cursorOffset) {
-        const sources = this._parser.parseSourceBlocks(content, '');
-        const items = this._parser.parseItems(content, '');
+    async _detectBibref(editor) {
+        const document = editor.document;
+        const cursorOffset = document.offsetAt(editor.selection.start);
+        const file = document.uri.fsPath;
 
-        // Mesclar e ordenar por startOffset
-        const allBlocks = [...sources, ...items].sort((a, b) => a.startOffset - b.startOffset);
-
-        if (allBlocks.length === 0) {
-            return null;
+        // Caminho primário: LSP estruturado (sem regex de gramática)
+        if (this._dataService) {
+            try {
+                const blocks = await this._dataService.getBlocks(file);
+                if (blocks && blocks.length > 0) {
+                    return _bibrefFromLspBlocks(blocks, document, cursorOffset);
+                }
+            } catch (err) {
+                console.warn('CoderService._detectBibref: LSP getBlocks failed, falling back to parser:', err.message);
+            }
         }
 
-        // Buscar bloco que contém o cursor
+        // Fallback: parser local (transitório — removido quando getBlocks estiver estável)
+        const content = document.getText();
+        const sources = this._parser.parseSourceBlocks(content, file);
+        const items = this._parser.parseItems(content, file);
+        const allBlocks = [...sources, ...items].sort((a, b) => a.startOffset - b.startOffset);
+
         for (const block of allBlocks) {
             if (cursorOffset >= block.startOffset && cursorOffset <= block.endOffset) {
                 return block.bibref.replace(/^@/, '');
             }
         }
 
-        // Fallback: bloco anterior mais próximo
         let nearest = null;
         for (const block of allBlocks) {
             if (block.startOffset <= cursorOffset) {
@@ -157,45 +161,63 @@ class CoderService {
                 break;
             }
         }
-
         return nearest ? nearest.bibref.replace(/^@/, '') : null;
     }
 
     /**
      * Calcula a posição de inserção após o bloco que contém o cursor.
+     * Usa blocos LSP via getBlocks quando disponíveis.
      *
-     * @param {string} content - Conteúdo completo do arquivo .syn
-     * @param {number} cursorOffset - Posição absoluta do cursor
-     * @returns {number} Offset para inserção (após END ITEM/END SOURCE)
+     * @param {vscode.TextEditor} editor
+     * @param {Array|null} lspBlocks - blocos já carregados (reutiliza chamada anterior)
+     * @returns {Promise<vscode.Position>} posição de inserção (fim do bloco)
      */
-    _findInsertionPoint(content, cursorOffset) {
-        const sources = this._parser.parseSourceBlocks(content, '');
-        const items = this._parser.parseItems(content, '');
+    async _findInsertionPoint(editor, lspBlocks) {
+        const document = editor.document;
+        const cursorOffset = document.offsetAt(editor.selection.start);
 
-        const allBlocks = [...sources, ...items].sort((a, b) => a.startOffset - b.startOffset);
-
-        if (allBlocks.length === 0) {
-            return content.length;
-        }
-
-        // Buscar bloco que contém o cursor
-        for (const block of allBlocks) {
-            if (cursorOffset >= block.startOffset && cursorOffset <= block.endOffset) {
-                return block.endOffset;
+        if (lspBlocks && lspBlocks.length > 0) {
+            let nearest = null;
+            for (const block of lspBlocks) {
+                const startOffset = document.offsetAt(
+                    new vscode.Position(block.range.start.line, block.range.start.character)
+                );
+                const endOffset = document.offsetAt(
+                    new vscode.Position(block.range.end.line, block.range.end.character)
+                );
+                if (cursorOffset >= startOffset && cursorOffset <= endOffset) {
+                    return document.positionAt(endOffset);
+                }
+                if (startOffset <= cursorOffset) {
+                    nearest = endOffset;
+                }
+            }
+            if (nearest !== null) {
+                return document.positionAt(nearest);
             }
         }
 
-        // Fallback: após o bloco anterior mais próximo
-        let nearest = null;
+        // Fallback: parser local
+        const content = document.getText();
+        const file = document.uri.fsPath;
+        const sources = this._parser.parseSourceBlocks(content, file);
+        const items = this._parser.parseItems(content, file);
+        const allBlocks = [...sources, ...items].sort((a, b) => a.startOffset - b.startOffset);
+
+        for (const block of allBlocks) {
+            if (cursorOffset >= block.startOffset && cursorOffset <= block.endOffset) {
+                return document.positionAt(block.endOffset);
+            }
+        }
+        let nearestEnd = null;
         for (const block of allBlocks) {
             if (block.startOffset <= cursorOffset) {
-                nearest = block;
+                nearestEnd = block.endOffset;
             } else {
                 break;
             }
         }
-
-        return nearest ? nearest.endOffset : content.length;
+        return document.positionAt(nearestEnd !== null ? nearestEnd : content.length);
     }
 
     /**
@@ -280,6 +302,37 @@ class CoderService {
             .replace(/^"(.*)"$/, '$1')
             .replace(/^'(.*)'$/, '$1');
     }
+}
+
+/**
+ * Resolve bibref a partir de blocos LSP e posição do cursor.
+ *
+ * @param {Array<{kind,bibref,range}>} blocks - blocos do LSP (ordenados por linha)
+ * @param {vscode.TextDocument} document
+ * @param {number} cursorOffset
+ * @returns {string|null}
+ */
+function _bibrefFromLspBlocks(blocks, document, cursorOffset) {
+    let lastBefore = null;
+
+    for (const block of blocks) {
+        const startOffset = document.offsetAt(
+            new vscode.Position(block.range.start.line, block.range.start.character)
+        );
+        const endOffset = document.offsetAt(
+            new vscode.Position(block.range.end.line, block.range.end.character)
+        );
+
+        if (cursorOffset >= startOffset && cursorOffset <= endOffset) {
+            return block.bibref || null;
+        }
+
+        if (startOffset <= cursorOffset) {
+            lastBefore = block.bibref || null;
+        }
+    }
+
+    return lastBefore;
 }
 
 module.exports = CoderService;
