@@ -1,11 +1,12 @@
 <?xml version="1.0" standalone="no"?>
-<svg xmlns="http://www.w3.org/2000/svg"
-     width="128" height="128"
-     viewBox="-385 -181 2626 2626"
-     role="img" aria-label="Synesis icon">
-  <title>Synesis</title>
-  <g transform="translate(0.000000,2264.000000) scale(0.100000,-0.100000)"
-     fill="currentColor" stroke="none">
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 20010904//EN"
+ "http://www.w3.org/TR/2001/REC-SVG-20010904/DTD/svg10.dtd">
+<svg version="1.0" xmlns="http://www.w3.org/2000/svg"
+ width="24px" height="24px" viewBox="0 0 1856.000000 2264.000000"
+ preserveAspectRatio="xMidYMid meet">
+
+<g transform="translate(0.000000,2264.000000) scale(0.100000,-0.100000)"
+fill="#000000" stroke="none">
 <path d="M9015 20519 c-1218 -63 -2441 -491 -3440 -1204 -349 -250 -552 -420
 -826 -694 -361 -363 -638 -719 -888 -1146 -544 -927 -786 -2071 -655 -3100 68
 -536 173 -938 369 -1410 163 -391 379 -765 660 -1140 156 -209 305 -377 539
@@ -49,5 +50,5 @@ l109 0 121 -98 c398 -319 876 -622 1362 -862 1275 -631 2738 -892 4081 -730
 -425 -408 -271 -905 -341 -1362 -191 -49 16 -148 58 -220 94 -435 215 -753
 634 -852 1122 -25 126 -25 461 0 588 127 628 613 1122 1235 1255 164 35 302
 44 457 30z"/>
-  </g>
+</g>
 </svg>

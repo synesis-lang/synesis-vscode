@@ -1,0 +1,20 @@
+{
+  "_comment": "Synesis file icon theme. Place this file and the icons/ folder next to your package.json, then register in contributes.iconThemes (see README.md in this folder).",
+  "iconDefinitions": {
+    "_syn_project": { "iconPath": "./icons/file-synp.svg" },
+    "_syn_template": { "iconPath": "./icons/file-synt.svg" },
+    "_syn_annotation": { "iconPath": "./icons/file-syn.svg" },
+    "_syn_ontology": { "iconPath": "./icons/file-syno.svg" },
+    "_syn_bib": { "iconPath": "./icons/file-bib.svg" }
+  },
+  "fileExtensions": {
+    "synp": "_syn_project",
+    "synt": "_syn_template",
+    "syn":  "_syn_annotation",
+    "syno": "_syn_ontology",
+    "bib":  "_syn_bib"
+  },
+  "fileNames": {
+    "*.synp": "_syn_project"
+  }
+}

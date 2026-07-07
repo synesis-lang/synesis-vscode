@@ -1,0 +1,19 @@
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bga" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#1a7f37"/>
+      <stop offset="100%" stop-color="#0d5723"/>
+    </linearGradient>
+  </defs>
+  <rect width="24" height="24" rx="5" fill="url(#bga)"/>
+  <!-- Annotation highlight band on line 2 -->
+  <rect x="6.5" y="10.8" width="11" height="2.5" rx="0.8" fill="rgba(255,255,255,0.18)"/>
+  <!-- Text lines -->
+  <g stroke="rgba(255,255,255,0.9)" stroke-linecap="round">
+    <line x1="7" y1="8"  x2="18" y2="8"  stroke-width="1.5"/>
+    <line x1="7" y1="12" x2="18" y2="12" stroke-width="1.6"/>
+    <line x1="7" y1="16" x2="14" y2="16" stroke-width="1.3" opacity="0.7"/>
+  </g>
+  <!-- Left-margin annotation marker -->
+  <rect x="3.5" y="10.8" width="2.2" height="2.5" rx="0.5" fill="#4ade80"/>
+</svg>

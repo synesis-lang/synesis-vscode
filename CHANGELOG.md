@@ -5,6 +5,23 @@ All notable changes to the Synesis extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-07-07
+
+### Changed
+
+- **Ícone da Activity Bar atualizado** (`synesis-icon.svg`)
+  - Substituído pelo monograma "S" estilizado (`s_synesis.svg`), adaptado com `viewBox` quadrado centralizado e `fill="currentColor"` para recolorir corretamente em temas dark/light.
+- **Ícone da extensão atualizado** (`synesis-icon.png`)
+  - Substituído pela nova logo (`s_synesis-bg.png`, 128×156px, fundo transparente) exibida na página de detalhes da extensão no VS Code e no Marketplace.
+
+## [0.6.2] - 2026-06-25
+
+### Changed
+
+- **Ícone da extensão atualizado** (`synesis-icon.png`)
+  - Substituído o ícone preto/branco anterior pela logo oficial do Synesis (gradiente ciano→verde com `{}` no centro).
+  - Dimensões mantidas em 128×128px com fundo transparente — compatível com temas dark e light do Marketplace.
+
 ## [0.6.1] - 2026-06-23
 
 ### Changed

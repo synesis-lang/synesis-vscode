@@ -1,0 +1,93 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background radial gradient -->
+    <radialGradient id="bg" cx="38%" cy="32%" r="70%">
+      <stop offset="0%"   stop-color="#1a4fc4"/>
+      <stop offset="60%"  stop-color="#0e2d8a"/>
+      <stop offset="100%" stop-color="#071a5e"/>
+    </radialGradient>
+
+    <!-- Cyan glow for outer S -->
+    <filter id="glow-cyan" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="7" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Softer green glow for inner S -->
+    <filter id="glow-green" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+
+    <!-- Blueprint grid -->
+    <pattern id="grid" width="38" height="38" patternUnits="userSpaceOnUse">
+      <path d="M 38 0 L 0 0 0 38" fill="none"
+            stroke="rgba(120,180,255,0.07)" stroke-width="0.8"/>
+    </pattern>
+
+    <!-- Text drop shadow -->
+    <filter id="text-shadow" x="-5%" y="-20%" width="110%" height="150%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="rgba(0,0,0,0.5)"/>
+    </filter>
+  </defs>
+
+  <!-- Rounded square background -->
+  <rect width="512" height="512" rx="88" fill="url(#bg)"/>
+
+  <!-- Blueprint grid overlay -->
+  <rect width="512" height="512" rx="88" fill="url(#grid)"/>
+
+  <!-- Subtle vignette (inner shadow effect via radial) -->
+  <radialGradient id="vignette" cx="50%" cy="45%" r="55%">
+    <stop offset="0%"   stop-color="rgba(255,255,255,0.0)"/>
+    <stop offset="100%" stop-color="rgba(0,0,20,0.30)"/>
+  </radialGradient>
+  <rect width="512" height="512" rx="88" fill="url(#vignette)"/>
+
+  <!-- ══════════════════════════════════
+       OUTER S — cyan (#22d3ee), glowing
+       Starts top-right → ends bottom-left
+       Path: M(340,68) C(450,68 450,256 256,256) C(62,256 62,444 172,444)
+       ══════════════════════════════════ -->
+  <path d="M340,68 C450,68 450,256 256,256 C62,256 62,444 172,444"
+        fill="none"
+        stroke="#22d3ee"
+        stroke-width="38"
+        stroke-linecap="butt"
+        filter="url(#glow-cyan)"/>
+
+  <!-- ══════════════════════════════════
+       INNER S — lime green (#4ade80)
+       Slightly inset from outer S
+       ══════════════════════════════════ -->
+  <path d="M300,112 C400,112 400,248 256,256 C112,264 112,400 212,400"
+        fill="none"
+        stroke="#4ade80"
+        stroke-width="30"
+        stroke-linecap="butt"
+        filter="url(#glow-green)"/>
+
+  <!-- Bright highlight stroke on outer S (top edge shine) -->
+  <path d="M340,68 C450,68 450,256 256,256 C62,256 62,444 172,444"
+        fill="none"
+        stroke="rgba(180,245,255,0.35)"
+        stroke-width="8"
+        stroke-linecap="butt"/>
+
+  <!-- "SYNESIS" label -->
+  <text x="256" y="474"
+        font-family="'Segoe UI', 'Arial Black', Arial, sans-serif"
+        font-size="78"
+        font-weight="700"
+        letter-spacing="14"
+        fill="white"
+        text-anchor="middle"
+        filter="url(#text-shadow)">SYNESIS</text>
+</svg>
