@@ -1,0 +1,47 @@
+{
+  "success": true,
+  "codes": [
+    {
+      "code": "social_cohesion",
+      "usageCount": 1,
+      "ontologyDefined": true,
+      "occurrences": [
+        {
+          "file": "annotations.syn",
+          "line": 12,
+          "column": 11,
+          "context": "code",
+          "field": "code"
+        }
+      ]
+    },
+    {
+      "code": "collective_action",
+      "usageCount": 1,
+      "ontologyDefined": true,
+      "occurrences": [
+        {
+          "file": "annotations.syn",
+          "line": 12,
+          "column": 28,
+          "context": "code",
+          "field": "code"
+        }
+      ]
+    },
+    {
+      "code": "teste_iebt",
+      "usageCount": 1,
+      "ontologyDefined": false,
+      "occurrences": [
+        {
+          "file": "annotations.syn",
+          "line": 12,
+          "column": 47,
+          "context": "code",
+          "field": "code"
+        }
+      ]
+    }
+  ]
+}

@@ -5,6 +5,37 @@ All notable changes to the Synesis extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-13
+
+### Added
+
+- **Teste de contrato LSP↔extensão** (`test/unit/contract.test.js`, `test/contract/`)
+  - Valida as fixtures do `projectBuilder.js` e uma cópia versionada dos JSON Schemas (fonte de verdade em `synesis-lsp/contracts/`) para os 4 custom requests. É a metade consumidora do contrato do diagnóstico D6 do Golden Standard: se o LSP mudar o formato de uma resposta, o CI da extensão fica vermelho junto com o do LSP. Adiciona `ajv` como dependência de dev.
+
+### Changed
+
+- **README reescrito para onboarding objetivo** (`README.md`, `images/docs/`)
+  - Corrigidas divergências com o `package.json` que confundiam o usuário novo: atalho de "Go to Definition" era `F2` no README mas é `F12`; a tabela de painéis não indicava que vários só aparecem para o tipo de arquivo ativo (`.syn`/`.syno`). Adicionadas as seções ausentes: comando de codificação por IA (`Ctrl+Shift+I`, `synesis-coder`), as 8 configurações `synesisExplorer.*`, e troubleshooting.
+  - Adicionado o passo `synesis init` (gera um projeto de exemplo completo e compilável), link para o cheatsheet da linguagem, e 8 screenshots das funcionalidades (painéis, grafo, abstract viewer) empacotadas em `images/docs/`. Estrutura em "Setup em 3 passos" + "Primeiros 60 segundos".
+- **Metadados de marketplace** (`package.json`)
+  - Adicionados `keywords` (descoberta na busca), `bugs`, `homepage`, e as categorias `Linters`/`Visualization`.
+
+### Security
+
+- **Sequestro do executável do LSP/coder via `.vscode/settings.json` de workspace não-confiável** (`package.json`, `src/lsp/executableGuard.js`, `extension.js`, `src/services/coderService.js`)
+  - As configurações `synesisExplorer.lsp.pythonPath`, `synesisExplorer.lsp.args` e `synesisExplorer.coder.path` não tinham `scope`, então um `.vscode/settings.json` incluído numa pasta de projeto de terceiro (a extensão ativa em `workspaceContains:*.synp`) sobrescrevia o caminho do binário, que era passado direto para `child_process` — execução de código ao abrir o projeto.
+  - Correção em três camadas: (1) as três settings agora são `"scope": "machine"` — não podem vir do workspace; (2) a extensão declara `capabilities.untrustedWorkspaces: limited`; (3) `executableGuard.resolveExecutable()` força o executável default quando o workspace não é confiável ou quando o caminho configurado resolve para dentro do workspace (defesa em profundidade contra um `.exe`/`.bat` embutido no ZIP do projeto). Cobre-se com `test/unit/executableGuard.test.js` (9 testes).
+- **CI e supply chain** (`.github/`, `.pre-commit-config.yaml`)
+  - Adicionado workflow de CI (lint + build + testes unitários + `npm audit`) — o repositório não tinha CI. GitHub Actions pinadas por SHA. `dependabot.yml` (npm + github-actions) e `SECURITY.md` adicionados.
+  - Job `security` (renomeado de `audit`) agora também roda Gitleaks (varredura de segredos no histórico), e `.pre-commit-config.yaml` adicionado com Gitleaks + hooks genéricos — completa a Frente 1 do Golden Baseline nos três repositórios.
+
+## [0.6.4] - 2026-07-07
+
+### Changed
+
+- **Espessura do ícone da Activity Bar ajustada** (`synesis-icon.svg`)
+  - Adicionado `stroke="currentColor"` com `stroke-width="120"` ao contorno do monograma "S" — o traço fino original ficava visualmente mais apagado que os ícones vizinhos em 24px.
+
 ## [0.6.3] - 2026-07-07
 
 ### Changed

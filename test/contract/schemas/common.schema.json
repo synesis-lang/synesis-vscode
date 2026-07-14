@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synesis-lang.org/contracts/lsp/common.schema.json",
+  "title": "Synesis LSP — shared definitions",
+  "description": "Building blocks shared by the custom-request response schemas. Versioned together with them under contracts/VERSION.",
+  "$defs": {
+    "location": {
+      "type": "object",
+      "description": "A source position. Paths are relative to the workspace root; line and column are 1-based.",
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 }
+      },
+      "required": ["file", "line"],
+      "additionalProperties": false
+    },
+    "occurrence": {
+      "type": "object",
+      "description": "A place where a code is used. Emitted by getCodes.",
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "context": { "$ref": "#/$defs/occurrenceContext" },
+        "field": { "type": "string" }
+      },
+      "required": ["file", "line", "column", "context", "field"],
+      "additionalProperties": false
+    },
+    "annotationOccurrence": {
+      "type": "object",
+      "description": "Like occurrence, plus the enclosing item name. Emitted by getOntologyAnnotations.",
+      "properties": {
+        "file": { "type": "string" },
+        "itemName": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "context": { "$ref": "#/$defs/occurrenceContext" },
+        "field": { "type": "string" }
+      },
+      "required": ["file", "itemName", "line", "column", "context", "field"],
+      "additionalProperties": false
+    },
+    "occurrenceContext": {
+      "description": "Whether the code was used in a CODE field or inside a CHAIN.",
+      "enum": ["code", "chain"]
+    },
+    "errorResponse": {
+      "type": "object",
+      "description": "Returned by every custom request when the workspace is not compiled or the request fails.",
+      "properties": {
+        "success": { "const": false },
+        "error": { "type": "string" }
+      },
+      "required": ["success", "error"],
+      "additionalProperties": false
+    }
+  }
+}

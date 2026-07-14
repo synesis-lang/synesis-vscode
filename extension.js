@@ -24,6 +24,7 @@
 const path = require('path');
 const vscode = require('vscode');
 const SynesisLspClient = require('./src/lsp/synesisClient');
+const { resolveExecutable } = require('./src/lsp/executableGuard');
 const DataService = require('./src/services/dataService');
 
 // Core
@@ -922,6 +923,15 @@ function resolveWorkspaceRoot(document) {
 
 async function startLspClient(client, pythonPath, lspArgs = []) {
     try {
+        // Defense in depth: never spawn an executable supplied by (or living
+        // inside) an untrusted workspace. See src/lsp/executableGuard.js.
+        const guard = resolveExecutable(pythonPath, 'synesis-lsp');
+        if (guard.forcedDefault) {
+            vscode.window.showWarningMessage(
+                `Synesis LSP: ${guard.reason}.`
+            );
+        }
+        pythonPath = guard.command;
         const normalizedPath = String(pythonPath || '').trim().replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1');
         lspCommandPath = normalizedPath || pythonPath;
         lspCommandArgs = Array.isArray(lspArgs)

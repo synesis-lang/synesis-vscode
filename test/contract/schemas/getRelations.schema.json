@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synesis-lang.org/contracts/lsp/getRelations.schema.json",
+  "title": "synesis/getRelations — response",
+  "description": "List of relational triples between concepts. Producer: get_relations (explorer_requests.py). Consumer: DataService.getRelations (dataService.js). location and type are present only for triples the LSP could index back to a source position.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "success": { "const": true },
+        "relations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "from": { "type": "string" },
+              "relation": { "type": "string" },
+              "to": { "type": "string" },
+              "location": { "$ref": "common.schema.json#/$defs/location" },
+              "type": { "enum": ["qualified", "simple"] }
+            },
+            "required": ["from", "relation", "to"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["success", "relations"],
+      "additionalProperties": false
+    },
+    { "$ref": "common.schema.json#/$defs/errorResponse" }
+  ]
+}

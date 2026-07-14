@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.vscode-test/
+media/mermaid.min.js
+*.min.js
