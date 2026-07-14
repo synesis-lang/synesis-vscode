@@ -1,0 +1,37 @@
+{
+  "success": true,
+  "annotations": [
+    {
+      "code": "collective_action",
+      "ontologyDefined": true,
+      "occurrences": [
+        {
+          "file": "annotations.syn",
+          "itemName": "unknown",
+          "line": 12,
+          "column": 28,
+          "context": "code",
+          "field": "code"
+        }
+      ],
+      "ontologyFile": "ontology.syno",
+      "ontologyLine": 8
+    },
+    {
+      "code": "social_cohesion",
+      "ontologyDefined": true,
+      "occurrences": [
+        {
+          "file": "annotations.syn",
+          "itemName": "unknown",
+          "line": 12,
+          "column": 11,
+          "context": "code",
+          "field": "code"
+        }
+      ],
+      "ontologyFile": "ontology.syno",
+      "ontologyLine": 1
+    }
+  ]
+}

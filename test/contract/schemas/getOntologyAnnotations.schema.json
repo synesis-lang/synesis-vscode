@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synesis-lang.org/contracts/lsp/getOntologyAnnotations.schema.json",
+  "title": "synesis/getOntologyAnnotations — response",
+  "description": "Ontology concepts with their occurrences across the project. Producer: get_ontology_annotations (ontology_annotations.py). Consumer: DataService.getOntologyAnnotations (dataService.js). ontologyFile and ontologyLine are present only when the concept's definition has a known source position.",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "success": { "const": true },
+        "annotations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "ontologyDefined": { "type": "boolean" },
+              "ontologyFile": { "type": "string" },
+              "ontologyLine": { "type": "integer", "minimum": 1 },
+              "occurrences": {
+                "type": "array",
+                "items": { "$ref": "common.schema.json#/$defs/annotationOccurrence" }
+              }
+            },
+            "required": ["code", "ontologyDefined", "occurrences"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["success", "annotations"],
+      "additionalProperties": false
+    },
+    { "$ref": "common.schema.json#/$defs/errorResponse" }
+  ]
+}

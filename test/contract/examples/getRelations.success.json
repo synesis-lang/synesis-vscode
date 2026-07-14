@@ -1,0 +1,60 @@
+{
+  "success": true,
+  "relations": [
+    {
+      "from": "Custo",
+      "relation": "CORRELATES",
+      "to": "Aceitacao",
+      "location": {
+        "file": "t02.syn",
+        "line": 19,
+        "column": 5
+      },
+      "type": "simple"
+    },
+    {
+      "from": "Custo",
+      "relation": "Aceitacao",
+      "to": "Percepcao_Risco",
+      "location": {
+        "file": "t02.syn",
+        "line": 42,
+        "column": 5
+      },
+      "type": "simple"
+    },
+    {
+      "from": "Custo",
+      "relation": "INFLUENCES",
+      "to": "Aceitacao",
+      "location": {
+        "file": "t02.syn",
+        "line": 53,
+        "column": 5
+      },
+      "type": "simple"
+    },
+    {
+      "from": "INFLUENCES",
+      "relation": "CONSTRAINS",
+      "to": "Aceitacao",
+      "location": {
+        "file": "t02.syn",
+        "line": 65,
+        "column": 5
+      },
+      "type": "simple"
+    },
+    {
+      "from": "Custo",
+      "relation": "INFLUENCES",
+      "to": "Aceitacao Social",
+      "location": {
+        "file": "t02.syn",
+        "line": 76,
+        "column": 5
+      },
+      "type": "simple"
+    }
+  ]
+}

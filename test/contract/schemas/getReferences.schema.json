@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synesis-lang.org/contracts/lsp/getReferences.schema.json",
+  "title": "synesis/getReferences — response",
+  "description": "List of SOURCE blocks with item counts. Producer: get_references (explorer_requests.py). Consumer: DataService.getReferences (dataService.js).",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "success": { "const": true },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "bibref": { "type": "string" },
+              "itemCount": { "type": "integer", "minimum": 0 },
+              "fields": { "type": "object" },
+              "title": { "type": "string" },
+              "location": { "$ref": "common.schema.json#/$defs/location" }
+            },
+            "required": ["bibref", "itemCount"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["success", "references"],
+      "additionalProperties": false
+    },
+    { "$ref": "common.schema.json#/$defs/errorResponse" }
+  ]
+}

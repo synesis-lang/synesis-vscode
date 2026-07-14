@@ -1,0 +1,18 @@
+{
+  "success": true,
+  "references": [
+    {
+      "bibref": "@smith2024",
+      "itemCount": 1,
+      "fields": {
+        "description": "Qualitative study on community resilience strategies in urban contexts."
+      },
+      "title": "",
+      "location": {
+        "file": "annotations.syn",
+        "line": 1,
+        "column": 1
+      }
+    }
+  ]
+}

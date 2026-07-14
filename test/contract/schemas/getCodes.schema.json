@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synesis-lang.org/contracts/lsp/getCodes.schema.json",
+  "title": "synesis/getCodes — response",
+  "description": "List of codes with usage frequency and precise occurrences. Producer: get_codes (explorer_requests.py). Consumer: DataService.getCodes (dataService.js).",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "success": { "const": true },
+        "codes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string" },
+              "usageCount": { "type": "integer", "minimum": 0 },
+              "ontologyDefined": { "type": "boolean" },
+              "occurrences": {
+                "type": "array",
+                "items": { "$ref": "common.schema.json#/$defs/occurrence" }
+              }
+            },
+            "required": ["code", "usageCount", "ontologyDefined", "occurrences"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["success", "codes"],
+      "additionalProperties": false
+    },
+    { "$ref": "common.schema.json#/$defs/errorResponse" }
+  ]
+}
