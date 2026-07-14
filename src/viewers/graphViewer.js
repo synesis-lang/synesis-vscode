@@ -431,7 +431,7 @@ ${mermaidCode}
                         // Capturar tamanho natural (sem padding) a partir do viewBox ou bbox
                         const vb = svg.getAttribute('viewBox');
                         if (vb) {
-                            const parts = vb.split(/[\s,]+/).map(Number);
+                            const parts = vb.split(/[,\\s]+/).map(Number);
                             if (parts.length === 4 && parts[2] > 0 && parts[3] > 0) {
                                 naturalWidth  = parts[2];
                                 naturalHeight = parts[3];
