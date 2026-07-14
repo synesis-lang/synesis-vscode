@@ -1,99 +1,149 @@
 # Synesis
 
-> **Visual navigation and assisted editing for Synesis projects in Visual Studio Code.**
-
-Synesis is a VS Code extension for working with Synesis files (`.syn`, `.synp`, `.synt`, `.syno`). It provides navigation panels for bibliographic references, codes, relations, ontologies, and template fields, along with real-time diagnostics as you write.
+> **Knowledge engineering in VS Code — the official interface for the Synesis ecosystem.**
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![VSCode >=1.60](https://img.shields.io/badge/VSCode-%3E%3D1.60.0-blue.svg)](https://code.visualstudio.com/)
+[![VS Code >=1.60](https://img.shields.io/badge/VS%20Code-%3E%3D1.60.0-blue.svg)](https://code.visualstudio.com/)
+
+Synesis turns your qualitative-research project into live, navigable data: bibliographic references, analytical codes, causal relations, and ontology annotations — all derived directly from your template and annotation files, with real-time diagnostics as you type.
+
+![Full view of the Synesis extension](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/10_full_view.png)
 
 ---
 
-## What is Synesis
+## Setup (3 steps)
 
-Synesis is the visual interface of the Synesis ecosystem. It connects to the Synesis compiler to display, in real time, the data from your qualitative research project: bibliographic references, analytical codes, causal relations (chains), ontology topics, and ontology annotations.
+**1. Install the compiler and language server** (they do the analysis; the extension is the interface):
 
-Everything is derived directly from your template (`.synt`) and annotation files (`.syn`, `.syno`) — no manual field configuration required.
-
----
-
-## Installation
-
-### Prerequisites
-
-Install the Synesis compiler and language server via terminal:
-
-```
+```bash
 pip install synesis synesis-lsp
 ```
 
-### Install the extension
+**2. Create your first project** — in an empty folder, run:
 
-1. Download the `.vsix` file from the [releases page](https://github.com/synesis-lang/synesis-vscode/releases).
-2. In VS Code: `Ctrl+Shift+P` → "Extensions: Install from VSIX..." → select the downloaded file.
+```bash
+synesis init
+```
 
----
+This generates a complete, compilable example: `project.synp`, `template.synt`, `references.bib`, `annotations.syn`, and `ontology.syno`. It is the fastest way to see every panel populated.
 
-## Quick Start
+**3. Install the extension** and open that folder in VS Code. The Synesis icon appears in the Activity Bar and the panels fill in automatically.
 
-1. Open a folder containing a `.synp` file (Synesis project) in VS Code.
-2. Click the Synesis icon in the left sidebar.
-3. The panels will be populated automatically with your project data.
-
----
-
-## Sidebar Panels
-
-The extension adds a sidebar with six panels:
-
-| Panel | What it shows |
-|-------|---------------|
-| **References** | All bibliographic sources in the project (`SOURCE`), with their annotation items nested below |
-| **Codes** | All analytical codes used in the annotations, with occurrences listed per file |
-| **Relations** | Causal relations (`CHAIN`) declared in items, grouped by source |
-| **Ontology Topics** | Topics defined in ontology files (`.syno`) |
-| **Ontology Annotations** | Usage of ontology topics across `.syn` annotation files |
-| **Template Fields** | Fields defined in the project template (`.synt`), grouped by scope (SOURCE / ITEM / ONTOLOGY) |
-
-Clicking any item in a panel opens the corresponding file and positions the cursor at the exact line.
+> If `pip` installed to a location outside your `PATH`, set **`synesisExplorer.lsp.pythonPath`** in Settings to the full path of `synesis-lsp`.
 
 ---
 
-## Commands and Shortcuts
+## First 60 seconds
 
-| Shortcut | Command | Description |
-|----------|---------|-------------|
-| `Ctrl+Alt+G` | Synesis: Show Relation Graph | Opens the relation graph for the entire project |
-| `Ctrl+Alt+F` | Synesis: Show Relation Graph per File | Opens the relation graph for the active file |
-| `Ctrl+Alt+I` | Synesis: Show Relation Graph per Item | Opens the graph for the item under the cursor |
-| `Ctrl+Shift+A` | Synesis: Show Abstract | Displays the bibliographic abstract for the active reference |
-| `F2` (in panel) | Rename Code / Rename Reference | Renames a code or reference across the entire project |
+1. Run `synesis init` in an empty folder, then open it in VS Code.
+2. Click the **Synesis** icon in the Activity Bar (left).
+3. Browse the **References** and **Codes** panels — click any entry to jump to its exact line.
+4. Open `annotations.syn`: errors appear inline and in the **Problems** panel (`Ctrl+Shift+M`).
+5. Press `Ctrl+Alt+G` to see the relation graph.
 
-The relation graph is interactive: you can zoom in and out and navigate through the nodes.
+![Opening a Synesis project](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/03_projeto_synesis.png)
 
-Context menus are available in the **Codes** panel (go to definition) and the **References** panel (rename reference).
-
----
-
-## Real-Time Diagnostics
-
-While editing `.syn` and `.syno` files, the extension displays underlines and error messages directly in the editor — missing required fields, invalid bibliographic references, codes not defined in the template, and more. Errors also appear in the VS Code **Problems** panel (`Ctrl+Shift+M`).
+> **Keep the [Synesis cheatsheet](https://synesis-lang.github.io/synesis-docs/landing/pt/synesis-cheatsheet.html) handy** — a one-page reference for the Synesis language syntax.
+>
+> New to the language itself? Start from the [Synesis documentation](https://github.com/synesis-lang/synesis).
 
 ---
 
-## Themes
+## What you get
 
-The extension includes two visual themes optimized for Synesis files:
+**Navigation panels** (Activity Bar → Synesis). Some appear only for the relevant file type:
 
-- **Synesis Dark**
-- **Synesis Light**
+| Panel | Shows | Visible when |
+|-------|-------|--------------|
+| **References** | Bibliographic sources (`SOURCE`), items nested below | always |
+| **Codes** | Analytical codes, with each occurrence | a project is loaded |
+| **Relations** | Causal chains (`CHAIN`), grouped by source | editing a `.syn` file |
+| **Ontology Topics** | Topics from ontology files | editing a `.syno` file |
+| **Ontology Annotations** | Where ontology topics are used across `.syn` files | editing a `.syn` file |
+| **Template Fields** | Fields from the template (`.synt`), by scope | always |
 
-To activate: `Ctrl+Shift+P` → "Preferences: Color Theme" → select the desired theme.
+Click any entry to open the file at the exact line.
+
+![The Synesis panels in the Activity Bar](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/04_painel_synesis.png)
+
+**References** — every bibliographic source, with its annotation items nested below.
+
+![References panel](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/05_references.png)
+
+**Codes** — every analytical code, with each occurrence, ready to jump to.
+
+![Codes panel](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/06_codes.png)
+
+**Relations** — causal chains (`CHAIN`) between concepts, grouped by source.
+
+![Relations panel](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/07_relations.png)
+
+**Relation graph** — interactive, zoomable graph of your chains, for the whole project, one file, or one item (`Ctrl+Alt+G`).
+
+![Relation graph viewer](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/08_graph_viewer.png)
+
+**Abstract viewer** — the bibliographic abstract for the active reference (`Ctrl+Shift+A`).
+
+![Abstract viewer](https://raw.githubusercontent.com/synesis-lang/synesis-vscode/main/images/docs/09_abstract_viewer.png)
+
+**Real-time diagnostics** — missing required fields, unknown references, codes not in the template, and more, underlined as you edit `.syn`/`.syno`.
+
+**AI-assisted coding** — send a selection to `synesis-coder` to generate annotations (`Ctrl+Shift+I`; requires `pip install synesis-coder`).
+
+**Two themes** — *Synesis Dark* / *Synesis Light* (`Ctrl+Shift+P` → "Color Theme").
+
+---
+
+## Key commands
+
+Run any of these from the Command Palette (`Ctrl+Shift+P`, type "Synesis"), or use the shortcut:
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Alt+G` | Relation graph — whole project |
+| `Ctrl+Alt+F` | Relation graph — active file |
+| `Ctrl+Alt+I` | Relation graph — item under cursor |
+| `Ctrl+Shift+A` | Show bibliographic abstract for the active reference |
+| `Ctrl+Shift+I` | Code the current selection with `synesis-coder` |
+| `F12` | Go to a code's definition |
+| `F2` | Rename a code or reference across the whole project |
+
+---
+
+## Settings
+
+All under `synesisExplorer.*` (File → Preferences → Settings → "Synesis"):
+
+| Setting | Purpose |
+|---------|---------|
+| `lsp.pythonPath` | Path to the `synesis-lsp` executable, if not on `PATH` |
+| `lsp.enabled` | Turn the language server on/off |
+| `diagnostics.enabled` | Toggle inline error squiggles |
+| `inlayHints.enabled` | Show `(Author, Year)` hints after references |
+| `semanticHighlighting.enabled` | AST-based highlighting (needs a Synesis theme) |
+| `completion.autoImportCodes` | Offer ontology codes in autocomplete |
+| `coder.path` | Path to the `synesis-coder` executable |
+
+`lsp.pythonPath`, `lsp.args` and `coder.path` are machine-scoped: a workspace cannot override which executable runs, so opening someone else's project is safe.
+
+---
+
+## Troubleshooting
+
+- **Panels are empty** — make sure the folder contains a `.synp` file and that `synesis-lsp` is installed and reachable (check the *Synesis LSP* output channel).
+- **A panel is missing** — several panels are file-type-specific (see the table above); open a `.syn` or `.syno` file to reveal them.
+- **"Failed to start Synesis LSP"** — set `synesisExplorer.lsp.pythonPath` to the full path of the executable.
+
+---
+
+## Resources
+
+- **[Synesis cheatsheet](https://synesis-lang.github.io/synesis-docs/landing/pt/synesis-cheatsheet.html)** — one-page language syntax reference.
+- **[Documentation](https://github.com/synesis-lang/synesis)** — the Synesis language and compiler.
+- Run `synesis init` any time to regenerate a working example project.
 
 ---
 
 ## License
 
-MIT License — Christian Maciel De Britto.
-
-See [CHANGELOG.md](CHANGELOG.md) for the version history.
+MIT — Christian Maciel De Britto. See [CHANGELOG.md](CHANGELOG.md) for version history.
