@@ -1,13 +1,53 @@
+# Only dist/, media/, icons/, themes/, syntaxes/, language-configuration.json,
+# package.json, README.md, CHANGELOG.md, LICENSE and the extension icon ship.
+# Everything else is excluded.
+
+# --- Dev tooling / repo metadata ---
 .vscode/**
 .vscode-test/**
-test/**
+.vscode-test.mjs
+Planning/**
+.github/**
+.gitnexus/**
+.claude/**
 .gitignore
+.gitattributes
 .eslintrc.json
+.eslintignore
+.pre-commit-config.yaml
 *.vsix
-node_modules/**
+
+# --- Sources and tests (bundled into dist/ by esbuild) ---
 src/**
+test/**
 esbuild.js
 extension.js
+extension.js.map
+dist/**/*.map
+node_modules/**
 package-lock.json
-ROTEIRO_TECNICO.md
-ADENDO_LARK_JS.md
+
+# --- Contract fixtures (dev-only) ---
+test/contract/**
+
+# --- Documentation and planning (not needed at runtime) ---
+*.md
+!README.md
+!CHANGELOG.md
+docs/**
+assets/**
+CITATION.cff
+
+# --- Large source images / logos ---
+# The README embeds screenshots via raw GitHub URLs, so images/ need not ship.
+# Runtime assets under icons/ (file icon theme, filter icon) are NOT excluded.
+images/**
+# Root-level logo/preview PNGs and SVGs that are not the activity-bar icon:
+synesis_logo_vscode.png
+synesis.png
+synesis-icon-preview.png
+s_synesis.png
+s_synesis.svg
+s_synesis_new.svg
+s_synesis-bg.png
+s_synesis-bg_128.png
