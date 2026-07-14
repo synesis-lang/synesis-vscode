@@ -25,6 +25,7 @@
 const { execFile } = require('child_process');
 const vscode = require('vscode');
 const SynesisParser = require('../parsers/synesisParser');
+const { resolveExecutable } = require('../lsp/executableGuard');
 
 class CoderService {
     /**
@@ -297,10 +298,13 @@ class CoderService {
     _getCoderPath() {
         const config = vscode.workspace.getConfiguration('synesisExplorer');
         const raw = config.get('coder.path', 'synesis-coder');
-        // Normalizar aspas (mesmo padrão de startLspClient)
-        return String(raw || 'synesis-coder').trim()
-            .replace(/^"(.*)"$/, '$1')
-            .replace(/^'(.*)'$/, '$1');
+        // Defense in depth: never run an executable supplied by (or living
+        // inside) an untrusted workspace. See src/lsp/executableGuard.js.
+        const guard = resolveExecutable(raw, 'synesis-coder');
+        if (guard.forcedDefault) {
+            vscode.window.showWarningMessage(`Synesis Coder: ${guard.reason}.`);
+        }
+        return guard.command;
     }
 }
 

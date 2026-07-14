@@ -2,7 +2,7 @@
   "name": "synesis",
   "displayName": "Synesis",
   "description": "Knowledge Engineering in VS Code: Official LSP client for Synesis.",
-  "version": "0.6.3",
+  "version": "0.7.0",
   "publisher": "synesis-lang",
   "author": "Christian Maciel De Britto",
   "license": "MIT",
@@ -10,13 +10,26 @@
     "type": "git",
     "url": "https://github.com/synesis-lang/synesis-vscode"
   },
+  "bugs": {
+    "url": "https://github.com/synesis-lang/synesis-vscode/issues"
+  },
+  "homepage": "https://github.com/synesis-lang/synesis-vscode#readme",
   "icon": "synesis-icon.png",
   "engines": {
     "vscode": "^1.60.0"
   },
   "categories": [
     "Programming Languages",
+    "Linters",
+    "Visualization",
     "Other"
+  ],
+  "keywords": [
+    "synesis",
+    "qualitative research",
+    "knowledge engineering",
+    "ontology",
+    "CAQDAS"
   ],
   "activationEvents": [
     "workspaceContains:*.synp"
@@ -485,12 +498,14 @@
         "synesisExplorer.lsp.pythonPath": {
           "type": "string",
           "default": "synesis-lsp",
-          "description": "Synesis LSP executable path."
+          "scope": "machine",
+          "description": "Synesis LSP executable path. Machine-scoped: cannot be overridden by a workspace's .vscode/settings.json, so opening an untrusted project cannot redirect the executable that is launched."
         },
         "synesisExplorer.lsp.args": {
           "type": "array",
           "default": [],
-          "description": "Arguments passed to the Synesis LSP executable (e.g. [\"-m\", \"synesis_lsp\"]).",
+          "scope": "machine",
+          "description": "Arguments passed to the Synesis LSP executable (e.g. [\"-m\", \"synesis_lsp\"]). Machine-scoped for the same reason as lsp.pythonPath.",
           "items": {
             "type": "string"
           }
@@ -518,9 +533,16 @@
         "synesisExplorer.coder.path": {
           "type": "string",
           "default": "synesis-coder",
-          "description": "Path to the synesis-coder executable."
+          "scope": "machine",
+          "description": "Path to the synesis-coder executable. Machine-scoped: cannot be overridden by a workspace's .vscode/settings.json."
         }
       }
+    }
+  },
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": "limited",
+      "description": "In an untrusted workspace the language server and synesis-coder are launched only from the machine-level executable paths, never from a path supplied by the workspace."
     }
   },
   "scripts": {
@@ -546,6 +568,7 @@
     "@types/vscode": "^1.60.0",
     "@vscode/test-cli": "^0.0.12",
     "@vscode/test-electron": "^3.0.0",
+    "ajv": "^8.20.0",
     "chai": "^4.3.0",
     "esbuild": "^0.20.2",
     "eslint": "^8.0.0",
