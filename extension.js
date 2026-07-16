@@ -25,6 +25,7 @@ const path = require('path');
 const vscode = require('vscode');
 const SynesisLspClient = require('./src/lsp/synesisClient');
 const { resolveExecutable } = require('./src/lsp/executableGuard');
+const { computeWatchTargets, diffWatchTargets } = require('./src/lsp/sharedWatchTargets');
 const DataService = require('./src/services/dataService');
 
 // Core
@@ -249,6 +250,79 @@ function activate(context) {
         editorChangeDebouncer.run(refreshFn);
     };
 
+    // ---------------------------------------------------------------------
+    // Shared ontology watchers (INCLUDE SHARED ONTOLOGY)
+    //
+    // A shared ontology lives OUTSIDE the project folder (another drive, a
+    // network share, `..`). onDidSaveTextDocument only fires for documents open
+    // in the editor, so a shared ontology changed by git pull, another window or
+    // another process would never trigger revalidation — the project that
+    // includes it would go stale silently.
+    //
+    // This reintroduces FileSystemWatcher deliberately: it was removed in the
+    // past as "redundant with onDidSaveTextDocument" under the assumption that a
+    // project is self-contained. INCLUDE SHARED ONTOLOGY breaks that assumption.
+    // The LSP hands us the reverse index (target -> projects) so we know which
+    // workspace to reload when a target changes.
+    // ---------------------------------------------------------------------
+    const sharedWatchers = new Map(); // target path -> { watcher, roots:Set }
+    const sharedWatcherDebouncer = new Debouncer(300);
+
+    const onSharedOntologyChanged = (target) => {
+        const entry = sharedWatchers.get(target);
+        if (!entry) return;
+        // Debounced: a git pull can rewrite the file several times in a burst.
+        sharedWatcherDebouncer.run(() => {
+            for (const root of entry.roots) {
+                runLspLoadProject({
+                    showProgress: false,
+                    showErrorMessage: false,
+                    workspaceRoot: root
+                });
+            }
+        });
+    };
+
+    const syncSharedWatchers = (sharedIncludes) => {
+        const wanted = computeWatchTargets(sharedIncludes);
+        const { toAdd, toRemove, toUpdate } = diffWatchTargets(sharedWatchers, wanted);
+
+        // Drop watchers whose target is no longer included by any project.
+        for (const target of toRemove) {
+            sharedWatchers.get(target).watcher.dispose();
+            sharedWatchers.delete(target);
+        }
+
+        // Refresh the reverse index of watchers we keep (projects may have changed).
+        for (const target of toUpdate) {
+            sharedWatchers.get(target).roots = wanted.get(target);
+        }
+
+        for (const target of toAdd) {
+            const roots = wanted.get(target);
+            try {
+                // Absolute pattern: the target is outside the workspace, so a
+                // workspace-relative glob would never match it.
+                const watcher = vscode.workspace.createFileSystemWatcher(
+                    new vscode.RelativePattern(
+                        vscode.Uri.file(path.dirname(target)),
+                        path.basename(target)
+                    )
+                );
+                const handler = () => onSharedOntologyChanged(target);
+                watcher.onDidChange(handler);
+                watcher.onDidCreate(handler);
+                watcher.onDidDelete(handler);
+                sharedWatchers.set(target, { watcher, roots });
+                context.subscriptions.push(watcher);
+            } catch (error) {
+                // A watcher must never break activation — the project still
+                // compiles, it just will not auto-refresh on external edits.
+                console.warn(`Synesis: failed to watch shared ontology ${target}: ${error.message}`);
+            }
+        }
+    };
+
     const runLspLoadProject = async ({ showProgress, showErrorMessage, workspaceRoot, fileExt }) => {
         if (!lspClient || !lspClient.isReady()) {
             setLspStatus('error');
@@ -284,6 +358,9 @@ function activate(context) {
 
             if (result && result.success) {
                 setLspStatus('ready', result.stats, result.lsp_version, result.compiler_version);
+                // Keep watchers in sync with the project's INCLUDE SHARED ONTOLOGY
+                // declarations — they change whenever the .synp changes.
+                syncSharedWatchers(result.sharedIncludes);
                 // Selective refresh: only update explorers affected by the saved file type.
                 // Manual load (no fileExt) refreshes all explorers.
                 if (fileExt) {

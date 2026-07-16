@@ -5,6 +5,20 @@ All notable changes to the Synesis extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.8.0] - 2026-07-15
+
+### Added
+
+- **Watcher da ontologia compartilhada — reintrodução deliberada de `FileSystemWatcher`** (`extension.js`, `src/lsp/sharedWatchTargets.js`)
+  - Uma ontologia declarada com `INCLUDE SHARED ONTOLOGY` vive **fora** da pasta do projeto (outro drive, rede, `..`). O `onDidSaveTextDocument` — único mecanismo de refresh desde que os watchers foram removidos — **só dispara para documentos abertos no editor**, então uma ontologia alterada por `git pull`, por outra janela ou por outro processo nunca disparava revalidação: o projeto que a inclui ficava obsoleto em silêncio.
+  - A extensão agora instala um `FileSystemWatcher` por alvo externo, usando o índice reverso `alvo → projetos` que o LSP devolve em `loadProject.sharedIncludes`. Quando um alvo muda (`onDidChange`/`onDidCreate`/`onDidDelete`), recarrega **apenas** os projetos que o declaram, com debounce de 300ms (um `git pull` pode reescrever o arquivo várias vezes seguidas).
+  - Os watchers são re-sincronizados a cada `loadProject`: alvo que deixou de ser incluído tem o watcher descartado; alvo mantido só atualiza seu índice reverso, sem recriar o watcher.
+  - **Reversão consciente:** os watchers foram removidos no passado como "redundantes com `onDidSaveTextDocument`", sob a premissa de que um projeto é auto-contido. `INCLUDE SHARED ONTOLOGY` invalida essa premissa — daí a reintrodução, agora escopada aos alvos externos em vez de um glob amplo do workspace.
+  - Falha ao instalar um watcher nunca quebra a ativação: o projeto continua compilando, apenas sem auto-refresh naquele alvo.
+  - Lógica de índice reverso extraída para `src/lsp/sharedWatchTargets.js` (sem dependência do módulo `vscode`) e coberta por 12 testes unitários, incluindo payload malformado e o caso de dois projetos compartilhando a mesma ontologia.
+
+---
+
 ## [0.7.0] - 2026-07-13
 
 ### Added
