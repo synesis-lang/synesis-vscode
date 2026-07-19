@@ -2,7 +2,7 @@
   "name": "synesis",
   "displayName": "Synesis",
   "description": "Knowledge Engineering in VS Code: Official LSP client for Synesis.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "synesis-lang",
   "author": "Christian Maciel De Britto",
   "license": "MIT",
@@ -573,6 +573,8 @@
     "chai": "^4.3.0",
     "esbuild": "^0.20.2",
     "eslint": "^8.0.0",
-    "mocha": "^10.0.0"
+    "mocha": "^10.0.0",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
   }
 }

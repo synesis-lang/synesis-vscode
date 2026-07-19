@@ -5,6 +5,42 @@ All notable changes to the Synesis extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-07-18
+
+### Fixed
+
+- **Keywords eram coloridas dentro de blocos `DESCRIPTION`** (`syntaxes/synesis.tmLanguage.json`)
+  - Na gramática do compilador o corpo de `DESCRIPTION ... END DESCRIPTION` é
+    texto livre (`description_lines: TEXT_LINE`), mas a grammar TextMate não
+    tinha regra para o bloco: `FIELD`, `TYPE` e `SCOPE` apareciam coloridos no
+    meio da prosa. Havia `guidelines_block` e nenhum equivalente para
+    `DESCRIPTION`.
+  - Adicionado `description_block`, espelhando `guidelines_block`. Só a forma de
+    **bloco** casa (`DESCRIPTION` sozinho na linha); a forma inline
+    (`DESCRIPTION texto`) continua sendo campo — se abrisse escopo, engoliria o
+    resto do arquivo por não ter `END`.
+
+### Changed
+
+- **Lista de keywords do TextMate passa a ser particionada por volatilidade**
+  - A lista escrita à mão divergia da gramática a cada construto novo — foi a
+    causa de `IDENTIFIES`/`REFERS TO` ficarem sem cor. Em vez de "completá-la"
+    (que só adiaria a próxima divergência), o critério agora é explícito:
+    entram apenas keywords **estáveis**, cuja mudança quebraria todo arquivo
+    `.syn`/`.synt` existente — essas não podem dessincronizar por definição.
+  - Keywords da **fronteira em evolução** (`IDENTIFIES`, `REFERS`, `TO`, `ON`,
+    `SHARED` — ligação multiprojeto) são deliberadamente omitidas: quem as
+    colore é o LSP, derivando da própria gramática (`synesis-lsp>=0.19.0`).
+  - Critério documentado na própria grammar (comentário `STABLE KEYWORDS ONLY`)
+    e travado por teste, para que a lista não seja "corrigida" de volta.
+
+### Added
+
+- `test/unit/tmGrammar.test.js` — 6 testes que exercitam a grammar com o engine
+  TextMate real (`vscode-textmate` + `vscode-oniguruma`), verificando os escopos
+  atribuídos em vez de inspecionar as regex. Cobre os blocos de texto livre, a
+  partição por volatilidade e a ausência de includes órfãos.
+
 ## [0.8.0] - 2026-07-15
 
 ### Added

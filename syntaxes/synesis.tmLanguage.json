@@ -5,6 +5,7 @@
   "patterns": [
     {"include": "#comments"},
     {"include": "#guidelines_block"},
+    {"include": "#description_block"},
     {"include": "#keywords"},
     {"include": "#references"},
     {"include": "#blocks"},
@@ -21,6 +22,7 @@
       ]
     },
     "keywords": {
+      "comment": "STABLE KEYWORDS ONLY. Criterion: a keyword belongs here when changing it would break every existing .syn/.synt file — so this list cannot drift out of sync with the grammar. Keywords on the evolving frontier of the language (currently IDENTIFIES, REFERS, TO, ON, SHARED — the multi-project linking feature) are DELIBERATELY OMITTED: the LSP colours them from the grammar itself (synesis_lsp/semantic_tokens.py), so listing them here only recreates the divergence this split exists to prevent. Do not 'complete' this list against the grammar. Promote a keyword here only once it is settled. See synesis/Planning/syntax_semantic_highlight.md.",
       "patterns": [
         {
           "name": "keyword.control.block.synesis",
@@ -68,6 +70,7 @@
           "patterns": [
             {"include": "#comments"},
             {"include": "#guidelines_block"},
+            {"include": "#description_block"},
             {"include": "#fields"}
           ]
         },
@@ -86,6 +89,7 @@
           "patterns": [
             {"include": "#comments"},
             {"include": "#guidelines_block"},
+            {"include": "#description_block"},
             {"include": "#fields"},
             {"include": "#chains"}
           ]
@@ -105,6 +109,7 @@
           "patterns": [
             {"include": "#comments"},
             {"include": "#guidelines_block"},
+            {"include": "#description_block"},
             {"include": "#fields"}
           ]
         },
@@ -123,6 +128,7 @@
           "patterns": [
             {"include": "#comments"},
             {"include": "#guidelines_block"},
+            {"include": "#description_block"},
             {"include": "#keywords"},
             {"include": "#fields"}
           ]
@@ -239,6 +245,36 @@
         {
           "comment": "Consume entire line — prevents any sub-pattern (field, keyword, chain) from matching inside GUIDELINES",
           "name": "string.unquoted.guidelines.synesis",
+          "match": "^.+$"
+        }
+      ]
+    },
+    "description_block": {
+      "patterns": [
+        {
+          "comment": "Block form only: 'DESCRIPTION' alone on its line, closed by 'END DESCRIPTION'. The inline field form ('DESCRIPTION texto' / 'description: texto') is deliberately not matched here — it has no END and its value is an ordinary field value. Grammar: description_lines is TEXT_LINE, so nothing inside is a keyword.",
+          "name": "meta.block.description.synesis",
+          "begin": "(?i)^\\s*(DESCRIPTION)\\s*(?:#.*)?\\r?$",
+          "end": "(?i)^\\s*(END)\\s+(DESCRIPTION)\\b",
+          "beginCaptures": {
+            "1": {"name": "keyword.control.field.synesis"}
+          },
+          "endCaptures": {
+            "1": {"name": "keyword.control.field.synesis"},
+            "2": {"name": "keyword.control.field.synesis"}
+          },
+          "patterns": [
+            {"include": "#description_content"}
+          ]
+        }
+      ]
+    },
+    "description_content": {
+      "patterns": [
+        {"include": "#comments"},
+        {
+          "comment": "Consume entire line — prevents any sub-pattern (field, keyword, chain) from matching inside DESCRIPTION",
+          "name": "string.unquoted.description.synesis",
           "match": "^.+$"
         }
       ]
