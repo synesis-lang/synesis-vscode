@@ -560,20 +560,20 @@
   },
   "dependencies": {
     "bibtex-parse-js": "^0.0.24",
-    "vscode-languageclient": "^9.0.0"
+    "vscode-languageclient": "^10.1.0"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.10",
-    "@types/node": "^14.x",
-    "@types/vscode": "^1.60.0",
-    "@vscode/test-cli": "^0.0.12",
+    "@types/node": "^26.x",
+    "@types/vscode": "^1.125.0",
+    "@vscode/test-cli": "^0.0.15",
     "@vscode/test-electron": "^3.0.0",
     "@vscode/vsce": "^3.9.2",
     "ajv": "^8.20.0",
-    "chai": "^4.3.0",
-    "esbuild": "^0.20.2",
-    "eslint": "^8.0.0",
-    "mocha": "^10.0.0",
+    "chai": "^6.2.2",
+    "esbuild": "^0.28.1",
+    "eslint": "^10.7.0",
+    "mocha": "^11.7.6",
     "vscode-oniguruma": "^2.0.1",
     "vscode-textmate": "^9.3.2"
   }
