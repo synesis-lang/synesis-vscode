@@ -137,6 +137,9 @@ const stub = {
     LanguageModelTextPart,
     LanguageModelToolCallPart,
     LanguageModelToolResultPart,
+    // Mesmos valores do `vscode.d.ts`: os conversores de mensagem decidem o
+    // papel comparando com `Assistant`.
+    LanguageModelChatMessageRole: { User: 1, Assistant: 2 },
     // O que `invokeGraphTool` devolve: mesmo shape do resultado de uma
     // ferramenta MCP, para que o restante do chat não distinga os dois caminhos.
     LanguageModelToolResult: class LanguageModelToolResult {

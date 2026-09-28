@@ -7,6 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-28
+
+### Adicionado — modelos locais do Ollama no chat
+
+Um quinto provedor, **Ollama**, para usar no `@synesis` modelos que rodam na
+própria máquina ou num servidor da rede — sem API key e sem o corpus sair da
+rede local. Configura-se no card **Ollama (modelos locais)** da página de
+configuração: endereço do servidor, janela de contexto e um botão **Testar**,
+que lista os modelos com a mesma função que monta o seletor (o teste passar
+significa que os modelos vão aparecer) e avisa quais não suportam ferramentas —
+esses respondem sem consultar o banco.
+
+- **Opt-in.** Com o endereço em branco (padrão), o provedor fica desligado e
+  nada é consultado. Com ele, os modelos instalados aparecem no seletor;
+  modelos só de embedding ficam fora, e o suporte a *tool-calling* é lido do
+  próprio Ollama (`capabilities`).
+- **API nativa (`/api/chat`), não a compatível com OpenAI.** O Ollama só aloca
+  o contexto que `num_ctx` pede e, sem pedido, usa um padrão pequeno que corta
+  o prompt em silêncio — e o prompt do chat carrega schema e regras. A `/v1`
+  não aceita `num_ctx`; a nativa aceita. A janela anunciada ao VSCode é
+  exatamente a pedida ao servidor: o menor entre
+  `synesisExplorer.chat.ollama.contextLength` (padrão 32.768) e o máximo do
+  modelo.
+- **Prazo de 3 s na consulta ao servidor.** Um endereço que aceita a conexão e
+  não responde travaria o seletor de modelo de todos os provedores.
+- **Escopo `machine`** para `ollama.url` e `ollama.contextLength`: um workspace
+  não confiável não pode redirecionar o chat — e os trechos do corpus que vão
+  no prompt — para outro servidor.
+
+Verificado contra um Ollama 0.34.4 real (qwen3.5, gemma4, Mistral Small 3.2):
+catálogo, chamada de ferramenta e resposta com o resultado, ida e volta.
+
+### Corrigido
+
+- As mensagens de "configure a API key" dos provedores Anthropic, OpenAI,
+  Gemini e OpenRouter apontavam para o comando "Synesis: Configurar Provedor de
+  IA", removido na 0.14.0. Agora apontam para "Synesis: Configuração".
+
 ## [0.14.0] - 2026-09-28
 
 ### Adicionado — o chat consulta o banco direto, e agora fala Neo4j

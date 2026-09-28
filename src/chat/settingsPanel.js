@@ -35,6 +35,7 @@ const {
     validateProfile,
     describeProfileGap
 } = require('./connectionProfiles');
+const { fetchOllamaModels, normalizeOllamaUrl, OLLAMA_DEFAULT_CONTEXT } = require('./modelCatalog');
 
 const VIEW_TYPE = 'synesis.settings';
 
@@ -94,8 +95,53 @@ async function buildState(context) {
                 optional: Boolean(f.optional)
             }))
         })),
-        providers
+        providers,
+        ollama: readOllamaSettings()
     };
+}
+
+/**
+ * Endereço e janela do Ollama. Não são segredo: vivem em `settings.json`, com
+ * escopo `machine` (ver package.json), e o painel só oferece um jeito melhor de
+ * editá-los — com teste.
+ */
+function readOllamaSettings() {
+    const config = vscode.workspace.getConfiguration('synesisExplorer.chat');
+    const url = config.get('ollama.url');
+    const contextLength = Number(config.get('ollama.contextLength'));
+    return {
+        url: typeof url === 'string' ? url : '',
+        contextLength: Number.isFinite(contextLength) && contextLength > 0 ? contextLength : OLLAMA_DEFAULT_CONTEXT
+    };
+}
+
+/**
+ * Testa o servidor Ollama: lista os modelos com a mesma função que monta o
+ * seletor, para que "o teste passou" signifique "os modelos vão aparecer".
+ */
+async function testOllama(url, contextLength) {
+    const root = normalizeOllamaUrl(url);
+    if (!root) {
+        return { ok: false, message: 'Informe o endereço do servidor (ex.: http://localhost:11434).' };
+    }
+    let models;
+    try {
+        models = await fetchOllamaModels(root, { contextLength });
+    } catch (error) {
+        const reason = error && error.name === 'TimeoutError' ? 'não respondeu a tempo' : 'não pôde ser alcançado';
+        return { ok: false, message: `O servidor ${root} ${reason}. Verifique se o Ollama está no ar e aceita conexões da rede (OLLAMA_HOST).` };
+    }
+    if (models.length === 0) {
+        return { ok: false, message: `O Ollama em ${root} respondeu, mas não tem modelo de conversa instalado (ollama pull …).` };
+    }
+    const semFerramenta = models.filter((m) => !m.toolCalling).map((m) => m.id);
+    let message = `Conectado. ${models.length} modelo(s): ${models.map((m) => m.id).join(', ')}.`;
+    if (semFerramenta.length) {
+        // O chat depende de ferramentas para consultar o banco; um modelo sem
+        // elas responde sem olhar o corpus. Melhor saber aqui do que na conversa.
+        message += ` Sem suporte a ferramentas (não consultam o banco): ${semFerramenta.join(', ')}.`;
+    }
+    return { ok: true, message };
 }
 
 /**
@@ -277,6 +323,21 @@ async function handleMessage(context, panel, message, onChanged) {
                     ? `${unique.length} modelo(s) do OpenRouter no seletor.`
                     : 'Lista limpa — voltam os modelos padrão do OpenRouter.'
             });
+        }
+
+        case 'saveOllama': {
+            const url = normalizeOllamaUrl(message.url);
+            const contextLength = Math.max(2048, Math.floor(Number(message.contextLength)) || OLLAMA_DEFAULT_CONTEXT);
+            const config = vscode.workspace.getConfiguration('synesisExplorer.chat');
+            // Global: settings de escopo `machine` não podem ir para o workspace.
+            await config.update('ollama.url', url, vscode.ConfigurationTarget.Global);
+            await config.update('ollama.contextLength', contextLength, vscode.ConfigurationTarget.Global);
+            return post({ toast: url ? `Ollama em ${url} salvo.` : 'Ollama desligado.' });
+        }
+
+        case 'testOllama': {
+            const result = await testOllama(message.url, Math.floor(Number(message.contextLength)) || undefined);
+            return panel.webview.postMessage({ type: 'ollamaResult', ok: result.ok, message: result.message });
         }
 
         case 'pickFolder': {
@@ -555,8 +616,8 @@ function renderHtml(webview) {
 
   <h2>🤖 Provedores de IA <span class="section-tag">o modelo que conversa</span></h2>
   <p class="lead">
-    Cada provedor só aparece no seletor de modelo da caixa de chat depois que a chave é salva.
-    Você escolhe o modelo ali, a cada conversa.
+    Cada provedor só aparece no seletor de modelo da caixa de chat depois que a chave é salva
+    (o Ollama, depois que o endereço é salvo). Você escolhe o modelo ali, a cada conversa.
   </p>
   <div id="providers"></div>
 
@@ -574,6 +635,7 @@ function renderHtml(webview) {
   let editing = null;      // id em edição, ou '__new__'
   let errors = {};
   let results = {};        // profileId -> resultado do teste
+  let ollamaResult = null; // resultado do teste do Ollama
 
   const el = (tag, props = {}, children = []) => {
     const node = document.createElement(tag);
@@ -844,6 +906,53 @@ function renderHtml(webview) {
       }
       root.appendChild(card);
     });
+    if (state.ollama) root.appendChild(renderOllama(state.ollama));
+  }
+
+  // Ollama: sem chave. O que liga o provedor e o endereco do servidor; o teste
+  // usa a mesma funcao que monta o seletor, entao "passou" = "os modelos aparecem".
+  function renderOllama(ollama) {
+    const card = el('div', { class: 'card' });
+    const head = el('div', { class: 'card-head' }, [
+      el('span', { class: 'card-title', text: 'Ollama (modelos locais)' })
+    ]);
+    head.appendChild(el('span', {
+      class: 'badge ' + (ollama.url ? 'ok' : ''),
+      text: ollama.url ? 'ligado' : 'desligado'
+    }));
+    card.appendChild(head);
+    card.appendChild(el('p', { class: 'hint', text:
+      'Sem API key: os modelos instalados no servidor aparecem no seletor de chat. ' +
+      'Em branco, o provedor fica desligado.' }));
+
+    card.appendChild(el('label', { text: 'Endereço do servidor', for: 'ol-url' }));
+    const url = el('input', { id: 'ol-url', value: ollama.url || '',
+      placeholder: 'http://localhost:11434' });
+    card.appendChild(url);
+
+    card.appendChild(el('label', { text: 'Janela de contexto (tokens)', for: 'ol-ctx' }));
+    const ctx = el('input', { id: 'ol-ctx', type: 'number', min: '2048', step: '1024',
+      value: String(ollama.contextLength || '') });
+    card.appendChild(ctx);
+    card.appendChild(el('p', { class: 'hint', text:
+      'Pedida ao Ollama em cada conversa (num_ctx), limitada ao máximo do modelo. ' +
+      'Sem ela o Ollama usa um padrão pequeno e corta o prompt em silêncio. Mais contexto exige mais VRAM.' }));
+
+    card.appendChild(el('div', { class: 'actions' }, [
+      el('button', { text: 'Salvar', onclick: () =>
+        vscode.postMessage({ type: 'saveOllama', url: url.value, contextLength: ctx.value }) }),
+      el('button', { class: 'secondary', text: 'Testar', onclick: () => {
+        ollamaResult = { pending: true }; render();
+        vscode.postMessage({ type: 'testOllama', url: url.value, contextLength: ctx.value });
+      }})
+    ]));
+    if (ollamaResult) {
+      card.appendChild(el('div', {
+        class: 'result ' + (ollamaResult.pending ? '' : ollamaResult.ok ? 'ok' : 'fail'),
+        text: ollamaResult.pending ? 'Testando…' : ollamaResult.message
+      }));
+    }
+    return card;
   }
 
   /**
@@ -886,6 +995,9 @@ function renderHtml(webview) {
     } else if (msg.type === 'testResult') {
       results[msg.profileId] = { ok: msg.ok, message: msg.message, databases: msg.databases };
       render();
+    } else if (msg.type === 'ollamaResult') {
+      ollamaResult = { ok: msg.ok, message: msg.message };
+      render();
     } else if (msg.type === 'folderPicked') {
       const input = document.getElementById(msg.field);
       if (input) input.value = msg.value;
@@ -910,5 +1022,6 @@ module.exports = {
     buildState,
     testConnection,
     testArcadeDbHttp,
-    testArcadeDbEmbedded
+    testArcadeDbEmbedded,
+    testOllama
 };

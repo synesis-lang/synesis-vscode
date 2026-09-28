@@ -3,17 +3,20 @@
  * @synesis chat participant. Lets the researcher pick Anthropic, OpenAI,
  * Google Gemini, or OpenRouter, each with its own API key stored via
  * VSCode's SecretStorage (encrypted by the OS, never synced between
- * machines) instead of a plaintext setting.
+ * machines) instead of a plaintext setting — or local models served by Ollama,
+ * which need no key, only the server address.
  */
 
 const vscode = require('vscode');
 const { AnthropicModelProvider } = require('./providers/anthropicModelProvider');
 const { OpenAiCompatibleModelProvider } = require('./providers/openAiCompatibleModelProvider');
 const { GeminiModelProvider } = require('./providers/geminiModelProvider');
+const { OllamaModelProvider } = require('./providers/ollamaModelProvider');
 const {
     CatalogCache,
     fetchAnthropicModels,
     fetchGeminiModels,
+    fetchOllamaModels,
     fetchOpenAiModels,
     fetchOpenRouterModels
 } = require('./modelCatalog');
@@ -53,6 +56,13 @@ const PROVIDERS = [
         label: 'OpenRouter (multi-modelo, inclui opções gratuitas)',
         keyHint: 'sk-or-v1-...',
         validate: (v) => v.startsWith('sk-or-')
+    },
+    {
+        // Sem chave: o que liga o provedor é o endereço do servidor.
+        id: 'ollama',
+        vendor: 'synesis-ollama',
+        label: 'Ollama (modelos locais)',
+        keyless: true
     }
 ];
 
@@ -88,6 +98,23 @@ function readOpenRouterModelIds() {
         return [];
     }
     return raw.map((id) => String(id || '').trim()).filter(Boolean);
+}
+
+/**
+ * Endereço do servidor Ollama; vazio = provedor desligado.
+ *
+ * Opt-in de propósito: consultar um endereço padrão em toda abertura do seletor
+ * custaria até o timeout de sondagem a quem não usa Ollama.
+ */
+function readOllamaUrl() {
+    const value = vscode.workspace.getConfiguration('synesisExplorer.chat').get('ollama.url');
+    return typeof value === 'string' ? value.trim() : '';
+}
+
+/** Janela de contexto a pedir ao Ollama (ver `fetchOllamaModels`). */
+function readOllamaContextLength() {
+    const value = Number(vscode.workspace.getConfiguration('synesisExplorer.chat').get('ollama.contextLength'));
+    return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
 /**
@@ -163,7 +190,30 @@ function buildDiscovery(providerId, getApiKey) {
     };
 }
 
+/**
+ * Descoberta do Ollama.
+ *
+ * Não obedece a `discoverModels`: sem descoberta não existe lista de Ollama —
+ * os modelos são os que o pesquisador instalou. A chave do cache inclui endereço
+ * e janela, para que mudar qualquer um valha na próxima abertura do seletor.
+ */
+function buildOllamaDiscovery() {
+    return () => {
+        const url = readOllamaUrl();
+        if (!url) {
+            return Promise.resolve([]);
+        }
+        const contextLength = readOllamaContextLength();
+        return catalogCache.resolve(`ollama:${url}:${contextLength || ''}`, () =>
+            fetchOllamaModels(url, { contextLength })
+        );
+    };
+}
+
 function buildProvider(context, providerId) {
+    if (providerId === 'ollama') {
+        return new OllamaModelProvider({ getBaseUrl: readOllamaUrl, discoverModels: buildOllamaDiscovery() });
+    }
     const getApiKey = getApiKeyGetter(context, providerId);
     const discoverModels = buildDiscovery(providerId, getApiKey);
     switch (providerId) {
@@ -231,7 +281,8 @@ function registerAllProviders(context) {
         vscode.workspace.onDidChangeConfiguration((event) => {
             if (
                 event.affectsConfiguration('synesisExplorer.chat.openRouterModels') ||
-                event.affectsConfiguration('synesisExplorer.chat.discoverModels')
+                event.affectsConfiguration('synesisExplorer.chat.discoverModels') ||
+                event.affectsConfiguration('synesisExplorer.chat.ollama')
             ) {
                 refreshAll();
             }
@@ -248,6 +299,7 @@ function registerAllProviders(context) {
 // de um deles — ver CHANGELOG, "um só caminho de configuração".
 
 module.exports = {
+    buildOllamaDiscovery,
     registerAllProviders,
     PROVIDERS,
     SECRET_KEYS

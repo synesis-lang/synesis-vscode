@@ -242,6 +242,114 @@ async function fetchGeminiModels(apiKey, { fetchImpl = fetch } = {}) {
 }
 
 /**
+ * Quanto esperar pelo servidor Ollama ao montar o seletor.
+ *
+ * Curto de propósito: a consulta roda toda vez que o seletor é aberto, e um
+ * endereço que não responde (medido: `localhost:11434` desta máquina aceita a
+ * conexão e nunca responde) travaria o seletor inteiro — de todos os provedores.
+ */
+const OLLAMA_PROBE_TIMEOUT_MS = 3000;
+
+/** Janela pedida ao Ollama quando a setting não informa. */
+const OLLAMA_DEFAULT_CONTEXT = 32768;
+
+/**
+ * Normaliza o endereço do Ollama para a raiz do servidor.
+ *
+ * Quem copia o endereço da documentação do Ollama costuma trazer `/v1` (a API
+ * compatível com OpenAI) ou `/api`. O provider usa a API NATIVA, então os dois
+ * sufixos saem — ver `OllamaModelProvider` para o porquê.
+ */
+function normalizeOllamaUrl(raw) {
+    let url = String(raw || '').trim().replace(/\/+$/, '');
+    url = url.replace(/\/(v1|api)$/i, '');
+    return url;
+}
+
+/** O contexto informado pelo `/api/show` (`<arquitetura>.context_length`). */
+function ollamaContextLength(show) {
+    const info = (show && show.model_info) || {};
+    for (const [key, value] of Object.entries(info)) {
+        if (key.endsWith('.context_length') && Number.isFinite(Number(value))) {
+            return Number(value);
+        }
+    }
+    return undefined;
+}
+
+/**
+ * Modelos instalados num servidor Ollama.
+ *
+ * `GET /api/tags` lista os modelos; `POST /api/show` diz, por modelo, o que ele
+ * faz (`capabilities`) e a janela máxima que suporta.
+ *
+ * **A janela anunciada é a que será PEDIDA, não a máxima do modelo.** O Ollama
+ * só aloca o contexto que `num_ctx` pede, e sem ele usa um padrão pequeno e
+ * corta o prompt em silêncio — justamente onde vivem o schema e as regras do
+ * chat. Anunciar a máxima (262.144 no qwen3.5) faria o VSCode encher um contexto
+ * que o servidor não vai alocar, ou esgotar a VRAM se alocasse. Por isso vale o
+ * MENOR entre a máxima do modelo e `contextLength` (setting do pesquisador).
+ *
+ * Modelos só de embedding (`capabilities` sem `completion`) não conversam e
+ * ficam fora do seletor.
+ */
+async function fetchOllamaModels(
+    baseUrl,
+    { contextLength = OLLAMA_DEFAULT_CONTEXT, fetchImpl = fetch, timeoutMs = OLLAMA_PROBE_TIMEOUT_MS } = {}
+) {
+    const root = normalizeOllamaUrl(baseUrl);
+    if (!root) {
+        return [];
+    }
+    const requested = Number.isFinite(contextLength) && contextLength > 0 ? contextLength : OLLAMA_DEFAULT_CONTEXT;
+
+    const response = await fetchImpl(`${root}/api/tags`, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!response || !response.ok) {
+        throw new Error(`Ollama indisponível em ${root} (HTTP ${response && response.status})`);
+    }
+    const payload = await response.json();
+    const names = ((payload && payload.models) || [])
+        .map((m) => m && (m.name || m.model))
+        .filter(Boolean);
+
+    const described = await Promise.all(
+        names.map(async (name) => {
+            try {
+                const show = await fetchImpl(`${root}/api/show`, {
+                    method: 'POST',
+                    headers: { 'content-type': 'application/json' },
+                    body: JSON.stringify({ model: name }),
+                    signal: AbortSignal.timeout(timeoutMs)
+                });
+                return { name, show: show && show.ok ? await show.json() : undefined };
+            } catch {
+                // Sem detalhes o modelo continua disponível, com a janela pedida.
+                return { name, show: undefined };
+            }
+        })
+    );
+
+    return described
+        .filter(({ show }) => {
+            const caps = show && show.capabilities;
+            return !Array.isArray(caps) || caps.includes('completion');
+        })
+        .map(({ name, show }) => {
+            const caps = show && show.capabilities;
+            const modelMax = ollamaContextLength(show);
+            const contextWindow = modelMax ? Math.min(modelMax, requested) : requested;
+            return {
+                id: name,
+                name: `${name} · Ollama`,
+                ...splitContext(contextWindow),
+                // Ausência de `capabilities` é ausência de informação (servidor
+                // antigo), não de suporte — mesmo critério do OpenRouter.
+                toolCalling: Array.isArray(caps) ? caps.includes('tools') : true
+            };
+        });
+}
+
+/**
  * Cache de catálogo por provedor, com TTL.
  *
  * O seletor do VSCode chama `provideLanguageModelChatInformation` sempre que é
@@ -284,11 +392,16 @@ module.exports = {
     fetchAnthropicModels,
     fetchGeminiModels,
     fetchOpenAiModels,
+    fetchOllamaModels,
     fetchOpenRouterModels,
     fromOpenRouterEntry,
+    normalizeOllamaUrl,
+    ollamaContextLength,
     splitContext,
     CATALOG_TTL_MS,
     DEFAULT_MAX_INPUT,
     DEFAULT_MAX_OUTPUT,
+    OLLAMA_DEFAULT_CONTEXT,
+    OLLAMA_PROBE_TIMEOUT_MS,
     OPENROUTER_CATALOG_URL
 };

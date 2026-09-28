@@ -110,7 +110,7 @@ class AnthropicModelProvider {
     async provideLanguageModelChatResponse(model, messages, options, progress, token) {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
-            throw new Error('Synesis Chat: configure a API key da Anthropic (comando "Synesis: Configurar Provedor de IA").');
+            throw new Error('Synesis Chat: configure a API key da Anthropic (comando "Synesis: Configuração").');
         }
 
         const body = {

@@ -163,7 +163,7 @@ class OpenAiCompatibleModelProvider {
     async provideLanguageModelChatResponse(model, messages, options, progress, token) {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
-            throw new Error(`Synesis Chat: configure a API key da ${this.vendorLabel} (comando "Synesis: Configurar Provedor de IA").`);
+            throw new Error(`Synesis Chat: configure a API key da ${this.vendorLabel} (comando "Synesis: Configuração").`);
         }
 
         const body = {

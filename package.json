@@ -2,7 +2,7 @@
   "name": "synesis",
   "displayName": "Synesis",
   "description": "Knowledge Engineering in VS Code: Official LSP client for Synesis.",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "publisher": "synesis-lang",
   "author": "Christian Maciel De Britto",
   "license": "MIT",
@@ -560,6 +560,19 @@
             "default": true,
             "markdownDescription": "Descobrir os modelos disponiveis consultando cada provedor (Anthropic, OpenAI, Gemini), em vez de usar a lista fixa da extensao.\n\nDesligue para manter o seletor estavel durante uma campanha de medicao, ou quando a rede/proxy bloquear as consultas de catalogo. Com a descoberta desligada, valem as listas internas."
           },
+          "synesisExplorer.chat.ollama.url": {
+            "type": "string",
+            "default": "",
+            "scope": "machine",
+            "markdownDescription": "Endereço do servidor Ollama para usar modelos locais no chat (ex.: `http://localhost:11434`, ou o endereço de um servidor da rede). Em branco, o provedor fica desligado.\n\nNão exige API key: os modelos instalados no servidor aparecem no seletor de chat, com suporte a *tool-calling* lido do próprio Ollama.\n\nEscopo `machine` por segurança: um workspace não confiável não pode redirecionar o chat — e os trechos do seu corpus que vão no prompt — para outro servidor."
+          },
+          "synesisExplorer.chat.ollama.contextLength": {
+            "type": "integer",
+            "default": 32768,
+            "minimum": 2048,
+            "scope": "machine",
+            "markdownDescription": "Janela de contexto (tokens) pedida ao Ollama em cada conversa — `num_ctx`. Vale o menor entre este valor e o máximo do modelo.\n\nO Ollama só aloca o que for pedido, e sem pedido usa um padrão pequeno que corta o prompt em silêncio. Valores maiores exigem mais memória de GPU; reduza se o servidor ficar sem VRAM."
+          },
           "synesisExplorer.chat.arcadedb.uri": {
             "type": "string",
             "default": "http://localhost:2480",
@@ -666,6 +679,10 @@
       {
         "vendor": "synesis-openrouter",
         "displayName": "Synesis (OpenRouter)"
+      },
+      {
+        "vendor": "synesis-ollama",
+        "displayName": "Synesis (Ollama)"
       }
     ]
   },
