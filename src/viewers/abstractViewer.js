@@ -56,13 +56,15 @@ class AbstractViewer {
         }
 
         const project = await projectLoader.load(projectUri);
-        if (!project.bibliographyPath) {
+        const bibPaths = project.bibliographyPaths || [];
+        if (bibPaths.length === 0) {
             vscode.window.showWarningMessage('Bibliography not found in project.');
             return;
         }
 
-        const entries = await bibtexParser.parse(project.bibliographyPath);
-        const entry = bibtexParser.findEntry(entries, bibref);
+        // Todos os .bib do projeto, na ordem do compilador: vale a primeira
+        // ocorrência da chave (uma repetida entre arquivos é o erro E089).
+        const entry = await bibtexParser.findEntryInFiles(bibPaths, bibref);
         if (!entry) {
             vscode.window.showErrorMessage(`Entry ${bibref} not found in bibliography.`);
             return;

@@ -19,10 +19,10 @@
  *     const project = await scanner.findProjectFile();
  */
 
-const fs = require('fs');
 const path = require('path');
 const vscode = require('vscode');
 const projectLoader = require('./projectLoader');
+const { expandInclude } = require('./includeExpander');
 
 class WorkspaceScanner {
     /**
@@ -205,42 +205,21 @@ class WorkspaceScanner {
             return [];
         }
 
+        // Mesma regra do compilador (includeExpander): arquivo, curinga ou pasta
+        // recursiva, restritos ao projeto e em ordem estável. Antes o curinga ia
+        // ao findFiles como caminho ABSOLUTO — que ele não casa —, e a lista caía
+        // no fallback "todos os .syn da pasta", incluindo arquivos não declarados.
         const results = new Map();
         for (const include of project.includes) {
-            const includePath = include?.path || '';
-            const absolutePath = include?.absolutePath || '';
-            const resolvedPath = absolutePath || (includePath ? path.resolve(project.dir, includePath) : '');
-
-            const globPath = this._normalizeGlobPath(resolvedPath);
-            if (this._hasGlob(globPath)) {
-                const matches = await vscode.workspace.findFiles(globPath, '**/node_modules/**');
-                for (const match of matches) {
-                    if (this._matchesExtension(match.fsPath, extension)) {
-                        results.set(match.fsPath, match);
-                    }
-                }
+            if (!include?.path) {
                 continue;
             }
-
-            if (!resolvedPath) {
-                continue;
-            }
-
-            try {
-                const stats = await fs.promises.stat(resolvedPath);
-                if (stats.isDirectory()) {
-                    const matches = await this._findFilesInFolder(resolvedPath, `**/*${extension}`);
-                    for (const match of matches) {
-                        results.set(match.fsPath, match);
-                    }
-                    continue;
+            const shared = Boolean(include.shared) && include.type === 'ONTOLOGY';
+            const { files } = expandInclude(project.dir, include.path, extension, { shared });
+            for (const file of files) {
+                if (this._matchesExtension(file, extension)) {
+                    results.set(file, vscode.Uri.file(file));
                 }
-
-                if (stats.isFile() && this._matchesExtension(resolvedPath, extension)) {
-                    results.set(resolvedPath, vscode.Uri.file(resolvedPath));
-                }
-            } catch (error) {
-                console.warn('Included path not found:', resolvedPath);
             }
         }
 
@@ -249,17 +228,6 @@ class WorkspaceScanner {
 
     _matchesExtension(filePath, extension) {
         return path.extname(filePath || '').toLowerCase() === extension;
-    }
-
-    _hasGlob(value) {
-        return /[*?[\]]/.test(value || '');
-    }
-
-    _normalizeGlobPath(value) {
-        if (!value) {
-            return '';
-        }
-        return value.replace(/\\/g, '/');
     }
 
     async _findFilesInActiveWorkspace(pattern) {

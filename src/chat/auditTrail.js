@@ -118,16 +118,38 @@ function renderTurnReport(trace) {
         header.push(`- Banco: \`${trace.database}\``);
     }
     if (trace.model) {
-        const model = [trace.model.name || trace.model.id, trace.model.vendor && `(${trace.model.vendor})`]
-            .filter(Boolean)
-            .join(' ');
-        header.push(`- Modelo: ${model}${trace.model.version ? ` · versão ${trace.model.version}` : ''}`);
+        // O ID entra junto do nome: é ele que identifica o modelo sem
+        // ambiguidade numa campanha que compara vários. O nome de exibição vem
+        // do catálogo e pode repetir entre provedores.
+        //
+        // A `version` saiu: os providers do Synesis declaram `'1.0.0'` fixo, em
+        // código, para todo modelo. Publicá-la como "versão" no relatório dava
+        // ares de dado a uma constante nossa — pior que não informar nada.
+        const nome = trace.model.name || trace.model.id;
+        const id = trace.model.id && trace.model.id !== nome ? ` \`${trace.model.id}\`` : '';
+        const vendor = trace.model.vendor ? ` (${trace.model.vendor})` : '';
+        header.push(`- Modelo: ${nome}${id}${vendor}`);
     }
     if (trace.startedAt) {
         header.push(`- Início: ${trace.startedAt}`);
     }
     header.push(`- Rodadas de modelo: ${trace.modelRequests}`);
-    header.push(`- Chamadas de ferramenta: ${trace.toolCalls.length}`);
+    // Prefetch e consulta do modelo contam separado (R4). Somados, uma melhoria
+    // que ENCURTA o laço — menos rodadas do modelo — aparece como custo maior se
+    // ela acrescentou uma leitura da extensão. Era o caso de B1/B2: a sondagem
+    // somava 7 chamadas ao mesmo número que deveria mostrar o laço encolhendo.
+    // Sem separar, nenhuma das melhorias seguintes é verificável.
+    const prefetchCalls = trace.toolCalls.filter((call) => call.prefetch).length;
+    const modelCalls = trace.toolCalls.length - prefetchCalls;
+    header.push(`- Consultas do modelo: ${modelCalls}`);
+    // Zero prefetch não significa que o turno respondeu sem schema: significa
+    // que ele veio do cache de sessão, sem ida ao banco. Dizer isso evita ler o
+    // número como se o contexto tivesse faltado — a trilha registra o que
+    // efetivamente consultou o servidor, e é assim que ela deve ser lida.
+    header.push(
+        `- Leituras da extensão (prefetch): ${prefetchCalls}` +
+            (prefetchCalls === 0 ? ' — schema e contexto vieram do cache da sessão' : '')
+    );
     if (header.length) {
         lines.push(...header, '');
     }

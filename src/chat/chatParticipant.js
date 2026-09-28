@@ -14,6 +14,37 @@ const { buildSystemPromptWithDatabase, getSelectedDatabase } = require('./databa
 const { verifyCitations, describeUnverified } = require('./citationGuard');
 const { renderLexicalCapability } = require('./lexicalCapability');
 const {
+    classifyIdentity,
+    collectObserved,
+    dedupeAgainstTemplate,
+    identityCandidates,
+    rankingCandidates,
+    renderIdentityGuidance,
+    renderObservedProperties,
+    undeclaredFrom,
+    unwrapNode,
+    sampleSizeFor
+} = require('./observedProperties');
+
+/**
+ * Quantos campos textuais entram na contagem de distintos por vértice.
+ *
+ * Oito cobre com folga os identificadores plausíveis (aqui: `bibtex`,
+ * `candidate_key`, `title`) sem montar uma consulta gigante num vértice com
+ * dezenas de campos de texto.
+ */
+const IDENTITY_FIELD_LIMIT = 8;
+
+/**
+ * Acima de quantos vértices a contagem de distintos deixa de valer a pena.
+ *
+ * Medido contra o banco remoto: 198ms nos 3.027 `Source`, 8.929ms nos 249.735
+ * `Item`. 50.000 deixa passar os vértices de identidade (candidatos, conceitos)
+ * e barra os de anotação, onde a pergunta de chave não se coloca.
+ */
+const IDENTITY_MAX_VERTICES = 50000;
+const { PrefetchCache, SLOT, mapWithConcurrency, PROBE_CONCURRENCY } = require('./prefetchCache');
+const {
     buildAuditPrompt,
     extractOriginRecords,
     groupByOrigin,
@@ -23,6 +54,7 @@ const {
 } = require('./auditTrail');
 const {
     TurnKind,
+    captureModel,
     createTurnTrace,
     recordToolCall,
     traceToolTexts,
@@ -31,6 +63,10 @@ const {
 } = require('./turnTrace');
 const { streamSourceAnchors, workspaceRoots, originKey } = require('./sourceAnchor');
 const { measureTurn, summarize, renderReport, TRAP_QUESTIONS } = require('./chatMetrics');
+const { readConnectionStatus, describeNextStep } = require('./connectionStatus');
+const { readActiveConnection, migrateLegacyConnection } = require('./connectionProfiles');
+const { readConnection: readLegacyConnection } = require('./connectionSettings');
+const { createGraphClient, describeTools, isGraphTool, invokeGraphTool } = require('./graphClients');
 
 const PARTICIPANT_ID = 'synesis.chatAssistant';
 const AUDIT_COMMAND = 'synesis.chat.auditTrail';
@@ -132,8 +168,10 @@ const ARCADEDB_TOOL_NAMES = ['query', 'get_schema', 'list_databases', 'server_st
  * LIMITAÇÃO CONHECIDA: se o pesquisador nomear o servidor no `mcp.json` sem
  * "arcade" (ex.: `"grafo"`), as ferramentas deixam de ser reconhecidas e o
  * chat avisa que não há ferramenta disponível — em vez de responder errado.
- * É por isso que o onboarding (`mcpSetup.js`) grava a chave `arcadedb`.
- * Falhar visivelmente aqui é preferível a afrouxar o casamento e voltar a
+ * O onboarding antigo (`mcpSetup.js`, removido na 0.14.0) gravava a chave
+ * `arcadedb`, que é a que os `mcp.json` existentes costumam ter. Desde a 0.14.0
+ * o chat consulta o banco direto (graphClients.js); este casamento só cobre
+ * ferramentas MCP publicadas por outros meios. Falhar visivelmente aqui é preferível a afrouxar o casamento e voltar a
  * capturar ferramentas de outros servidores.
  */
 const ARCADEDB_SERVER_HINT = 'arcade';
@@ -185,7 +223,68 @@ async function ensureMcpServersStarted() {
     }
 }
 
-async function runToolCallingLoop(model, initialMessages, tools, stream, token, systemPrompt, trace) {
+/**
+ * As ferramentas de grafo deste turno, e por qual caminho elas vieram.
+ *
+ * O chat tinha um caminho só: ferramentas MCP publicadas em `vscode.lm.tools`,
+ * reconhecidas por um filtro que exige a string `'arcade'` no nome do servidor.
+ * Isso amarrava o chat ao ArcadeDB sobre TCP e excluía o Neo4j por construção.
+ *
+ * Agora o perfil ativo decide. Quando existe um, o transporte é o dele — HTTP
+ * para o ArcadeDB, Bolt para o Neo4j — e o `mcp.json` deixa de participar: some
+ * a dependência de o servidor MCP ter subido nesta janela, some a credencial
+ * duplicada no workspace, e "salvei a conexão" passa a significar "o chat
+ * consulta".
+ *
+ * O caminho MCP permanece como fallback para quem ainda não migrou. Não é um
+ * segundo lugar de verdade: só é consultado quando NÃO há perfil ativo.
+ */
+async function resolveGraphTools(context) {
+    // Traz a configuração da versão anterior para o modelo novo, uma vez só.
+    // Sem isto, quem já tinha o chat funcionando o veria parar de funcionar ao
+    // atualizar — e a mensagem diria para configurar algo que já estava feito.
+    await migrateLegacyConnection(context, await readLegacyConnection(context));
+
+    const connection = await readActiveConnection(context);
+    if (connection) {
+        const client = createGraphClient(connection);
+        if (client) {
+            return {
+                tools: describeTools(connection.backend),
+                client,
+                profile: connection,
+                viaProfile: true
+            };
+        }
+    }
+
+    // Sem perfil: comportamento anterior, via MCP.
+    await ensureMcpServersStarted();
+    return { tools: selectArcadeDbTools(vscode.lm.tools), client: undefined, viaProfile: false };
+}
+
+/**
+ * Invoca uma ferramenta, seja ela local (perfil) ou MCP.
+ *
+ * Os dois caminhos devolvem `LanguageModelToolResult` com JSON em uma parte de
+ * texto, que é o que `citationGuard`, `sourceAnchor` e a trilha de auditoria
+ * leem. Uniformizar aqui é o que permitiu trocar o transporte sem tocar em
+ * nenhum dos três.
+ */
+async function invokeAnyTool(client, name, input, token, invocationToken) {
+    if (client && isGraphTool(name)) {
+        // A validação de argumentos vive dentro de `invokeGraphTool`, então
+        // cobre os dois backends do perfil (ArcadeDB e Neo4j). O caminho MCP
+        // abaixo não passa por ela de propósito: o servidor MCP valida o próprio
+        // contrato e já devolve o erro no vocabulário da ferramenta — o defeito
+        // que a validação corrige era do caminho direto, onde um argumento vazio
+        // virava um `HTTP 400 command missing` que o modelo não sabia ler.
+        return invokeGraphTool(client, name, input);
+    }
+    return vscode.lm.invokeTool(name, { input, toolInvocationToken: invocationToken }, token);
+}
+
+async function runToolCallingLoop(model, initialMessages, tools, stream, token, systemPrompt, trace, client) {
     const maxRounds = readMaxToolRounds();
     let messages = initialMessages;
     const options = {
@@ -210,6 +309,21 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
     for (let round = 0; round < maxRounds; round++) {
         if (trace) {
             trace.modelRequests += 1;
+            // **A identidade do modelo é reconfirmada aqui, no objeto que de
+            // fato responde.**
+            //
+            // `request.model` é lido no início do turno, antes das leituras de
+            // prefetch — e a própria API adverte: *"this is the model that is
+            // currently selected in the UI; don't hold onto this past the
+            // lifetime of the request"* (`vscode.d.ts`, `ChatRequest.model`).
+            // Trocar de modelo no meio da sessão fazia o relatório nomear o
+            // modelo anterior, e uma campanha que compara modelos atribuía o
+            // turno ao errado — o pior tipo de erro numa medição.
+            //
+            // `model` aqui é o objeto passado a `sendRequest`, lido no instante
+            // da chamada: é a identidade correta, aconteça o que acontecer com
+            // a seleção da UI antes ou depois.
+            captureModel(trace, model);
         }
         const response = await model.sendRequest(messages, options, token);
 
@@ -287,6 +401,44 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
                 trace.finishedAt = new Date().toISOString();
             }
 
+            // **Respondeu sem consultar o banco.**
+            //
+            // É o modo de falha típico do modelo pequeno, e o mais perigoso:
+            // ele produz um texto plausível sobre o corpus sem nunca chamar uma
+            // ferramenta, e hoje isso era indistinguível de uma resposta boa. Um
+            // registro com zero ITEMs já foi dado como OK por esse caminho.
+            //
+            // O aviso é o que torna legível uma campanha de "qual o menor modelo
+            // que dá conta": sem ele, o modelo que ignora as ferramentas parece
+            // ter respondido, e a medição registra sucesso onde houve invenção.
+            //
+            // A condição é **o modelo não chamou ferramenta**, e não "o turno
+            // não tocou o banco": as leituras de prefetch ficam de fora de
+            // propósito, porque elas acontecem sempre e não dizem nada sobre o
+            // que o modelo fez.
+            //
+            // Consequência assumida: uma resposta legítima apoiada só no
+            // `ProjectContext` ("quantos conceitos existem?" sai do resumo)
+            // também recebe o aviso. É o lado seguro do erro — o texto diz para
+            // tratar como hipótese, o que é verdade nesse caso, e o custo de
+            // silenciar um modelo que inventa é muito maior.
+            //
+            // Note que a partir do 2º turno o cache de prefetch faz `toolCalls`
+            // ficar vazio quando o modelo não consulta; o aviso continua correto
+            // ali, porque continua sendo verdade que ele não consultou.
+            const modelQueried = (trace ? trace.toolCalls : []).some((call) => !call.prefetch);
+            if (!modelQueried) {
+                stream.markdown(
+                    '\n\n---\n\n⚠️ **Esta resposta não consultou o banco.** ' +
+                        'Nenhuma ferramenta foi chamada neste turno, então o que está acima ' +
+                        'vem do que o modelo já trazia — não do seu corpus. Trate como ' +
+                        'hipótese, não como resultado.\n\n' +
+                        'Se a pergunta era sobre os dados, refaça-a de forma mais concreta ' +
+                        '(citando o conceito ou o campo de interesse); se o modelo ignora as ' +
+                        'ferramentas de forma consistente, ele não serve para esta tarefa.'
+                );
+            }
+
             // `kind` substitui o antigo booleano `consultedCorpus`, que era
             // `toolTexts.length > 0` e por isso valia `true` para um payload de
             // schema ou uma consulta vazia — oferecendo trilha de evidência onde
@@ -317,10 +469,12 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
             stream.progress(`Consultando ferramenta \`${call.name}\`...`);
             const startedAt = new Date().toISOString();
             try {
-                const result = await vscode.lm.invokeTool(
+                const result = await invokeAnyTool(
+                    client,
                     call.name,
-                    { input: call.input, toolInvocationToken: stream.toolInvocationToken },
-                    token
+                    call.input,
+                    token,
+                    stream.toolInvocationToken
                 );
                 toolResultParts.push(new vscode.LanguageModelToolResultPart(call.callId, result.content));
 
@@ -811,7 +965,7 @@ function describeAccessFailure(text, database) {
     return undefined;
 }
 
-async function readProjectContext(tools, database, token, { full = false, trace } = {}) {
+async function readProjectContext(tools, database, token, { full = false, trace, client } = {}) {
     if (!database) {
         return undefined;
     }
@@ -820,7 +974,9 @@ async function readProjectContext(tools, database, token, { full = false, trace 
     // hoje passam a lista já filtrada por `selectArcadeDbTools`, mas esta função
     // é exportada e testada isoladamente — depender do filtro do chamador é
     // exatamente o defeito que `matchesArcadeDbTool` existe para evitar.
-    const queryTool = tools.find((tool) => matchesArcadeDbTool(tool.name) && tool.name.endsWith('_query'));
+    const queryTool = tools.find(
+        (tool) => isGraphTool(tool.name) || (matchesArcadeDbTool(tool.name) && tool.name.endsWith('_query'))
+    );
     if (!queryTool) {
         return undefined;
     }
@@ -855,7 +1011,7 @@ async function readProjectContext(tools, database, token, { full = false, trace 
     };
 
     try {
-        const result = await vscode.lm.invokeTool(queryTool.name, { input }, token);
+        const result = await invokeAnyTool(client, queryTool.name, input, token, undefined);
         const texts = (result.content || [])
             .filter((part) => part instanceof vscode.LanguageModelTextPart)
             .map((part) => part.value);
@@ -1122,17 +1278,19 @@ function describeStaleness(generatedAt) {
     );
 }
 
-async function describeProjectSchema(tools, database, token, trace, metricsScope) {
+async function describeProjectSchema(tools, database, token, trace, metricsScope, client) {
     if (!database) {
         return undefined;
     }
-    const schemaTool = tools.find((tool) => matchesArcadeDbTool(tool.name) && tool.name.endsWith('_get_schema'));
+    const schemaTool = tools.find(
+        (tool) => isGraphTool(tool.name) || (matchesArcadeDbTool(tool.name) && tool.name.endsWith('_get_schema'))
+    );
     if (!schemaTool) {
         return undefined;
     }
 
     try {
-        const result = await vscode.lm.invokeTool(schemaTool.name, { input: { database } }, token);
+        const result = await invokeAnyTool(client, schemaTool.name, { database }, token, undefined);
         const texts = (result.content || [])
             .filter((part) => part instanceof vscode.LanguageModelTextPart)
             .map((part) => part.value);
@@ -1190,6 +1348,230 @@ async function describeProjectSchema(tools, database, token, trace, metricsScope
         console.warn('Synesis Chat: falha ao ler o schema do banco', error);
         return undefined;
     }
+}
+
+/**
+ * Rótulo seguro para interpolar numa consulta.
+ *
+ * O nome vem do `get_schema` — do servidor, portanto — mas entra numa string de
+ * consulta, e a sondagem varre TODOS os vértices em vez de um nome escolhido a
+ * dedo. Um rótulo com aspa ou parêntese quebraria a sintaxe; validar por lista
+ * branca é mais barato que confiar na origem. Grafo com rótulo exótico
+ * simplesmente não é sondado, que é a falha correta aqui.
+ */
+function validLabel(name) {
+    return typeof name === 'string' && /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+}
+
+/**
+ * Mede quais campos identificam uma linha deste vértice (A2).
+ *
+ * Uma consulta por vértice, contando o total e os distintos de cada candidato de
+ * uma vez — 207ms medidos sobre os 3.027 Sources deste corpus. Contar campo a
+ * campo custaria uma consulta por campo.
+ *
+ * O teto de campos existe porque a lista sai do dado observado: um vértice com
+ * quarenta propriedades textuais geraria uma consulta enorme para uma pergunta
+ * que os primeiros campos já respondem.
+ */
+async function probeIdentity(client, toolName, database, label, candidates, token, trace) {
+    const fields = (candidates || []).filter(validLabel).slice(0, IDENTITY_FIELD_LIMIT);
+    // Com menos de dois campos textuais não há escolha de chave a errar, e a
+    // contagem `count(DISTINCT ...)` varre o vértice inteiro — 249.735 linhas no
+    // `Item` deste corpus. Não vale pagá-la para descobrir que só existe um
+    // candidato. Medido: sem este corte, a sondagem passou de 7 para 15
+    // consultas e de 0,2s para 14,2s.
+    if (fields.length < 2) {
+        return undefined;
+    }
+
+    // **Portão de tamanho.** `count(DISTINCT ...)` varre o vértice: medido, 198ms
+    // nos 3.027 `Source` e **8.929ms** nos 249.735 `Item` — sozinho, mais que
+    // todo o resto do prefetch somado. Um `count(*)` puro custa 14ms mesmo no
+    // vértice grande, então perguntar o tamanho antes é praticamente de graça e
+    // evita a varredura cara.
+    //
+    // O corte não perde o caso que interessa: a armadilha de chave aparece onde
+    // o pesquisador agrupa por um rótulo humano (nome de candidato, título), e
+    // esses vértices são os de identidade — dezenas de milhares no máximo, não
+    // centenas de milhares de trechos anotados.
+    const sizeInput = {
+        database,
+        language: 'cypher',
+        query: `MATCH (n:${label}) RETURN count(n) AS total`
+    };
+    try {
+        const sizeResult = await invokeAnyTool(client, toolName, sizeInput, token, undefined);
+        const sizeTexts = (sizeResult.content || [])
+            .filter((part) => part instanceof vscode.LanguageModelTextPart)
+            .map((part) => part.value);
+        recordToolCall(trace, {
+            toolName,
+            input: sizeInput,
+            prefetch: true,
+            status: 'ok',
+            texts: sizeTexts
+        });
+        const sizeParsed = JSON.parse(sizeTexts.join(''));
+        const sizeRow = (sizeParsed.records || sizeParsed.result || [])[0];
+        const size = sizeRow && Number(sizeRow.total);
+        if (!Number.isFinite(size) || size === 0 || size > IDENTITY_MAX_VERTICES) {
+            return undefined;
+        }
+    } catch (error) {
+        recordToolCall(trace, {
+            toolName,
+            input: sizeInput,
+            prefetch: true,
+            status: 'error',
+            error: error.message || String(error)
+        });
+        return undefined;
+    }
+
+    const projections = fields.map((f) => `count(DISTINCT n.${f}) AS ${f}`).join(', ');
+    const input = {
+        database,
+        language: 'cypher',
+        query: `MATCH (n:${label}) RETURN count(n) AS __total, ${projections}`
+    };
+    try {
+        const result = await invokeAnyTool(client, toolName, input, token, undefined);
+        const texts = (result.content || [])
+            .filter((part) => part instanceof vscode.LanguageModelTextPart)
+            .map((part) => part.value);
+        recordToolCall(trace, { toolName, input, prefetch: true, status: 'ok', texts });
+        const parsed = JSON.parse(texts.join(''));
+        const row = (parsed.records || parsed.result || [])[0];
+        if (!row) {
+            return undefined;
+        }
+        const { __total: total, ...counts } = row;
+        return classifyIdentity(total, counts);
+    } catch (error) {
+        // Vértice que recuse a contagem simplesmente não recebe a orientação.
+        recordToolCall(trace, {
+            toolName,
+            input,
+            prefetch: true,
+            status: 'error',
+            error: error.message || String(error)
+        });
+        return undefined;
+    }
+}
+
+/**
+ * Sonda o DADO em busca do que o schema não declara.
+ *
+ * O `get_schema` lista só propriedades declaradas, e um grafo pode ter
+ * propriedades gravadas em todos os vértices sem nenhuma declaração — foi o que
+ * escondeu `total_score` do modelo no `candidatos_quinto_andar`. Ver
+ * `observedProperties.js` para o caso observado e a justificativa.
+ *
+ * Uma consulta por vértice, devolvendo o nó inteiro — o tamanho da amostra sai
+ * de `sampleSizeFor`, que encolhe para uma linha quando o vértice declara
+ * embedding (o vetor domina o tráfego e é descartado de qualquer forma).
+ * Medido contra o banco remoto: 225ms para os sete vértices deste corpus, e
+ * ~340 tokens de seção no prompt.
+ *
+ * Só os vértices de dado são sondados: `ProjectContext` fica de fora porque é
+ * metadado já lido por `readProjectContext`, e sondá-lo traria o `template_doc`
+ * de 28k chars inteiro para dentro de uma amostra que seria descartada.
+ *
+ * Best-effort em cada etapa: um vértice que recuse a consulta é pulado sem
+ * derrubar os outros, e falha geral devolve `undefined` — o chat segue com o
+ * schema declarado, que é o comportamento anterior a esta função.
+ */
+async function probeUndeclaredProperties(tools, database, schema, token, trace, client) {
+    if (!database || !schema || !Array.isArray(schema.vertices) || schema.vertices.length === 0) {
+        return undefined;
+    }
+    const queryTool = tools.find(
+        (tool) => isGraphTool(tool.name) || (matchesArcadeDbTool(tool.name) && tool.name.endsWith('_query'))
+    );
+    if (!queryTool) {
+        return undefined;
+    }
+
+    const probes = schema.vertices.filter((vertex) => {
+        const label = vertex && vertex.name;
+        return Boolean(label) && label !== 'ProjectContext' && validLabel(label);
+    });
+
+    // Em paralelo, com concorrência limitada (P2). `mapWithConcurrency` preserva
+    // a ordem da entrada, então a seção de prompt não muda conforme a ordem em
+    // que o servidor responder.
+    const probed = await mapWithConcurrency(probes, PROBE_CONCURRENCY, async (vertex) => {
+        const label = vertex.name;
+        const declaredNames = (vertex.properties || []).map((p) => p && p.name).filter(Boolean);
+        const input = {
+            database,
+            language: 'cypher',
+            query: `MATCH (n:${label}) RETURN n LIMIT ${sampleSizeFor(vertex)}`
+        };
+        try {
+            const result = await invokeAnyTool(client, queryTool.name, input, token, undefined);
+            const texts = (result.content || [])
+                .filter((part) => part instanceof vscode.LanguageModelTextPart)
+                .map((part) => part.value);
+            const text = texts.join('');
+            recordToolCall(trace, {
+                toolName: queryTool.name,
+                input,
+                prefetch: true,
+                status: 'ok',
+                texts
+            });
+            const parsed = JSON.parse(text);
+            const rows = (parsed.records || parsed.result || []).map(unwrapNode).filter(Boolean);
+            const observed = collectObserved(rows);
+            const undeclared = undeclaredFrom(observed, declaredNames);
+            const identity = await probeIdentity(
+                client,
+                queryTool.name,
+                database,
+                label,
+                identityCandidates(observed),
+                token,
+                trace
+            );
+            const guidance = renderIdentityGuidance(label, identity);
+            // `ranking` sai do observado INTEIRO, não de `undeclared`: a escolha
+            // entre dois campos de pontuação existe mesmo quando ambos já estão
+            // declarados no schema (A1).
+            const ranking = [...observed].map(([name, type]) => ({ name, type }));
+            // Qualquer um dos três sinais basta para o vértice entrar: um grafo
+            // com schema completo pode não ter nada a declarar e ainda assim
+            // precisar do aviso de chave ou de ranking.
+            const hasRanking = rankingCandidates(ranking).length >= 2;
+            return undeclared.length > 0 || guidance || hasRanking
+                ? { label, undeclared, guidance, ranking }
+                : undefined;
+        } catch (error) {
+            // Vértice vazio, sem permissão, ou resposta inesperada: os demais
+            // continuam. Sondagem é oportunista por definição.
+            recordToolCall(trace, {
+                toolName: queryTool.name,
+                input,
+                prefetch: true,
+                status: 'error',
+                error: error.message || String(error)
+            });
+            return undefined;
+        }
+    });
+
+    const byLabel = probed.filter(Boolean);
+
+    if (byLabel.length === 0) {
+        return undefined;
+    }
+    // Devolve só o OBSERVADO, não o texto pronto: a renderização depende de
+    // saber se o `template_doc` entrou neste turno (R1), o que só se decide
+    // depois — e este valor fica em cache entre turnos, em que essa decisão
+    // muda. Renderizar aqui congelaria a versão do primeiro turno.
+    return { byLabel };
 }
 
 /**
@@ -1313,7 +1695,7 @@ function taxonomyEdgePattern(schema, taxonomyLabel) {
     return '-->';
 }
 
-async function readTopTaxonomy(tools, database, conceptLabel, schema, token, limit = 3) {
+async function readTopTaxonomy(tools, database, conceptLabel, schema, token, limit = 3, client) {
     if (!database || !conceptLabel) {
         return { label: undefined, values: [] };
     }
@@ -1321,23 +1703,32 @@ async function readTopTaxonomy(tools, database, conceptLabel, schema, token, lim
     if (!taxonomyLabel) {
         return { label: undefined, values: [] };
     }
-    const queryTool = tools.find((tool) => matchesArcadeDbTool(tool.name) && tool.name.endsWith('_query'));
+    // Mesmo guarda da sondagem (R3): os dois rótulos são interpolados na
+    // consulta abaixo. Vêm do `get_schema`, mas validar aqui custa nada e
+    // elimina a inconsistência de tratar a mesma classe de risco de dois jeitos
+    // em funções vizinhas.
+    if (!validLabel(conceptLabel) || !validLabel(taxonomyLabel)) {
+        return { label: undefined, values: [] };
+    }
+    const queryTool = tools.find(
+        (tool) => isGraphTool(tool.name) || (matchesArcadeDbTool(tool.name) && tool.name.endsWith('_query'))
+    );
     if (!queryTool) {
         return { label: undefined, values: [] };
     }
     try {
-        const result = await vscode.lm.invokeTool(
+        const result = await invokeAnyTool(
+            client,
             queryTool.name,
             {
-                input: {
-                    database,
-                    language: 'cypher',
-                    query:
-                        `MATCH (c:${conceptLabel})${taxonomyEdgePattern(schema, taxonomyLabel)}(t:${taxonomyLabel}) ` +
-                        `RETURN t.name AS name, count(c) AS n ORDER BY n DESC LIMIT ${limit}`
-                }
+                database,
+                language: 'cypher',
+                query:
+                    `MATCH (c:${conceptLabel})${taxonomyEdgePattern(schema, taxonomyLabel)}(t:${taxonomyLabel}) ` +
+                    `RETURN t.name AS name, count(c) AS n ORDER BY n DESC LIMIT ${limit}`
             },
-            token
+            token,
+            undefined
         );
         const text = (result.content || [])
             .filter((part) => part instanceof vscode.LanguageModelTextPart)
@@ -1412,7 +1803,20 @@ function buildSuggestedQuestions(context, taxonomy = {}, metricNames = []) {
  * Sem banco selecionado, ou sem contexto no grafo, degrada para a orientação
  * mínima: o que fazer para chegar lá.
  */
-async function renderWelcome(stream, tools, database, token) {
+/**
+ * `cache` é opcional (P3): quando o participant o passa, a saudação e a primeira
+ * pergunta deixam de repetir as MESMAS duas consultas com segundos de intervalo
+ * — `readProjectContext` e `describeProjectSchema` rodavam aqui e de novo no
+ * handler. Sem ele a função se comporta como antes, que é o que mantém os testes
+ * existentes válidos e a função utilizável isoladamente.
+ */
+async function renderWelcome(stream, tools, database, token, client, cache, cacheScope) {
+    // `resolve` sem cache é a chamada direta: um caminho só, em vez de dois
+    // ramos que poderiam divergir. `cacheScope` cai para o nome do banco quando
+    // não é passado — a função continua utilizável isoladamente, e é o que os
+    // testes existentes exercitam.
+    const scope = cacheScope || database;
+    const resolve = (slot, produce) => (cache ? cache.resolve(scope, slot, produce) : produce());
     if (!database) {
         stream.markdown(
             'Ainda não há um banco selecionado.\n\n' +
@@ -1424,7 +1828,9 @@ async function renderWelcome(stream, tools, database, token) {
         return [];
     }
 
-    const context = await readProjectContext(tools, database, token);
+    const context = await resolve(SLOT.CONTEXT, () =>
+        readProjectContext(tools, database, token, { client })
+    );
 
     // Recusa de acesso: dizer a causa real. Tratar como "grafo sem contexto"
     // mandaria re-exportar o projeto, o que não resolve permissão.
@@ -1451,8 +1857,10 @@ async function renderWelcome(stream, tools, database, token) {
     // O schema decide qual é a taxonomia deste projeto e quais métricas ele tem.
     // Sem isto a saudação sugeria `Topic` e PageRank a todo projeto — os do
     // face85, não os do template de quem está perguntando.
-    const schema = await describeProjectSchema(tools, database, token);
-    const taxonomy = await readTopTaxonomy(tools, database, context.conceptLabel, schema, token);
+    const schema = await resolve(SLOT.SCHEMA, () =>
+        describeProjectSchema(tools, database, token, undefined, undefined, client)
+    );
+    const taxonomy = await readTopTaxonomy(tools, database, context.conceptLabel, schema, token, 3, client);
 
     const lines = [`## ${context.projectName || database}`, ''];
     if (context.description) {
@@ -1506,6 +1914,13 @@ function registerChatParticipant(context) {
     // comparação só vale dentro do mesmo corpus e do mesmo conjunto de perguntas.
     const sessionTurns = [];
 
+    // Cache das leituras de prefetch (P1). Schema, `ProjectContext` e as
+    // propriedades sondadas não mudam entre perguntas da mesma conversa — só
+    // uma reexportação do grafo os altera, e o TTL cobre esse caso. Sem ele,
+    // cada pergunta repetia ~280ms de consulta antes da primeira palavra do
+    // modelo, e a saudação ainda refazia tudo de novo na pergunta seguinte.
+    const prefetchCache = new PrefetchCache();
+
     const handler = async (request, chatContext, stream, token) => {
         const selectedDatabase = getSelectedDatabase(context);
 
@@ -1515,20 +1930,36 @@ function registerChatParticipant(context) {
             // A saudação não é resposta auditável. Os traces anteriores
             // permanecem no store — cada um é endereçado pelo seu botão, e
             // apagá-los aqui quebraria a auditoria de respostas ainda na tela.
-            await ensureMcpServersStarted();
+            const greeting = await resolveGraphTools(context);
             lastSuggestions = await renderWelcome(
                 stream,
-                selectArcadeDbTools(vscode.lm.tools),
+                greeting.tools,
                 selectedDatabase,
-                token
+                token,
+                greeting.client,
+                prefetchCache,
+                // O MESMO escopo que o handler usa. Chavear a saudação só pelo
+                // banco faria o cache nunca acertar entre ela e a primeira
+                // pergunta — que é exatamente o par que P3 existe para não
+                // repetir.
+                `${(greeting.profile && greeting.profile.id) || 'mcp'}|${selectedDatabase || ''}`
             );
             return;
         }
 
         lastSuggestions = [];
-        await ensureMcpServersStarted();
 
-        const tools = selectArcadeDbTools(vscode.lm.tools);
+        // O transporte vem do perfil ativo; o MCP é fallback para quem ainda
+        // não migrou. `client` indefinido significa "pelo MCP", e é o que
+        // `invokeAnyTool` usa para decidir o caminho de cada chamada.
+        const { tools, client, profile } = await resolveGraphTools(context);
+
+        // O cache é escopado por CONEXÃO + banco, não só por banco. Dois perfis
+        // podem apontar para bancos de mesmo nome em servidores diferentes — um
+        // local e um remoto, o caso normal de quem valida antes de publicar — e
+        // servir o schema de um deles sob o outro produziria a pior falha
+        // possível aqui: uma resposta plausível sobre o grafo errado.
+        const cacheScope = `${(profile && profile.id) || 'mcp'}|${selectedDatabase || ''}`;
 
         // Sem ferramentas o modelo não tem como consultar o banco — e, se
         // perguntado assim mesmo, ele INVENTA a resposta em vez de admitir que
@@ -1536,16 +1967,20 @@ function registerChatParticipant(context) {
         // certeza). Parar aqui é a diferença entre um erro visível e um dado
         // falso apresentado como verdadeiro.
         if (tools.length === 0) {
+            // Com perfil ativo isto quase não acontece: as ferramentas passam a
+            // vir do próprio perfil, não de um servidor MCP que pode não ter
+            // subido. Sobra o caso de perfil ausente ou incompleto — e aí
+            // `describeNextStep` nomeia a lacuna concreta em vez de repetir
+            // "configure a conexão" a quem acabou de configurá-la.
+            const next = describeNextStep(await readConnectionStatus(context, false));
             stream.markdown(
-                '**Não consultei o banco.** Nenhuma ferramenta do ArcadeDB está disponível, ' +
+                '**Não consultei o banco.** Nenhuma conexão com o grafo está disponível, ' +
                     'então qualquer resposta minha sobre os dados seria inventada.\n\n' +
-                    'Verifique se o servidor ArcadeDB está no ar e se o MCP está configurado — ' +
-                    'o comando **Synesis: Conectar ao ArcadeDB (MCP)** cuida da configuração.'
+                    (next ? next.message : '')
             );
-            stream.button({
-                command: 'synesis.chat.setupArcadeDbConnection',
-                title: 'Conectar ao ArcadeDB'
-            });
+            if (next) {
+                stream.button({ command: next.command, title: next.title });
+            }
             return;
         }
 
@@ -1574,7 +2009,9 @@ function registerChatParticipant(context) {
         // muda o que o resumo de schema deve dizer sobre um ranking. A leitura
         // é barata sem `template_doc`; a decisão de carregá-lo vem depois,
         // quando os nomes do schema já são conhecidos.
-        const contextRecord = await readProjectContext(tools, selectedDatabase, token, { trace });
+        const contextRecord = await prefetchCache.resolve(cacheScope, SLOT.CONTEXT, () =>
+            readProjectContext(tools, selectedDatabase, token, { trace, client })
+        );
         const metricsScope =
             contextRecord && contextRecord.metricsBackend && contextRecord.metricsScope
                 ? { backend: contextRecord.metricsBackend, scope: contextRecord.metricsScope }
@@ -1582,16 +2019,20 @@ function registerChatParticipant(context) {
 
         // Schema real do projeto: é o que adapta o assistente ao template
         // deste banco em vez de presumir o vocabulário de outro.
-        const schema = await describeProjectSchema(
-            tools,
-            selectedDatabase,
-            token,
-            trace,
-            metricsScope
+        const schema = await prefetchCache.resolve(cacheScope, SLOT.SCHEMA, () =>
+            describeProjectSchema(tools, selectedDatabase, token, trace, metricsScope, client)
         );
         if (schema && schema.text) {
             systemPrompt = `${systemPrompt}\n\n${schema.text}`;
         }
+
+        // O que o dado tem e o schema não declara (B1/B2). Vem DEPOIS do resumo
+        // de schema de propósito: é uma correção do que aquele resumo omite, e
+        // lê-se na ordem em que corrige. Banco com schema completo não gera
+        // seção nenhuma e não custa nada além da sondagem.
+        const observed = await prefetchCache.resolve(cacheScope, SLOT.OBSERVED, () =>
+            probeUndeclaredProperties(tools, selectedDatabase, schema, token, trace, client)
+        );
 
         // O `template_doc` entra por sinal ESTRUTURAL, não por palavra-chave em
         // português: primeiro turno da conversa, ou pergunta que não nomeia nada
@@ -1605,11 +2046,33 @@ function registerChatParticipant(context) {
             isFirstTurn,
             knownNames: (schema && schema.names) || []
         });
-        const projectContext = renderProjectContext(
-            needsTemplate
-                ? await readProjectContext(tools, selectedDatabase, token, { full: true, trace })
-                : contextRecord
-        );
+        // A leitura `full` fica num slot próprio (R2): ela é superconjunto da
+        // leve, mas custa os ~28,7k chars do `template_doc`, e cacheá-las juntas
+        // faria toda pergunta seguinte carregar o documento inteiro mesmo quando
+        // `needsTemplate` é falso. Slots separados mantêm cada custo no turno
+        // que de fato pediu por ele.
+        const contextForPrompt = needsTemplate
+            ? await prefetchCache.resolve(cacheScope, SLOT.CONTEXT_FULL, () =>
+                  readProjectContext(tools, selectedDatabase, token, { full: true, trace, client })
+              )
+            : contextRecord;
+
+        // A seção da sondagem é montada AQUI, e não junto do schema, porque
+        // depende de saber se o `template_doc` entrou (R1): quando ele entra, os
+        // nomes que ele já cita saem da sondagem e fica só o que ele não diz —
+        // o tipo, e a advertência de texto numérico. A POSIÇÃO no prompt não
+        // muda: continua entre o schema e a semântica do template, que é a ordem
+        // em que cada camada corrige a anterior.
+        const observedText = observed
+            ? renderObservedProperties(
+                  dedupeAgainstTemplate(observed.byLabel, contextForPrompt && contextForPrompt.templateDoc)
+              )
+            : '';
+        if (observedText) {
+            systemPrompt = `${systemPrompt}\n\n${observedText}`;
+        }
+
+        const projectContext = renderProjectContext(contextForPrompt);
         if (projectContext) {
             systemPrompt = `${systemPrompt}\n\n${projectContext}`;
         }
@@ -1626,7 +2089,8 @@ function registerChatParticipant(context) {
                 stream,
                 token,
                 systemPrompt,
-                trace
+                trace,
+                client
             );
 
             // Métricas do turno: aritmética sobre o que já aconteceu, sem
@@ -1824,6 +2288,8 @@ module.exports = {
     selectArcadeDbTools,
     matchesArcadeDbTool,
     describeProjectSchema,
+    probeUndeclaredProperties,
+    validLabel,
     readProjectContext,
     renderProjectContext,
     renderSemanticCapability,

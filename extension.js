@@ -48,7 +48,7 @@ const AbstractViewer = require('./src/viewers/abstractViewer');
 const CoderService = require('./src/services/coderService');
 
 // Chat (Via B - MCP-connected chat participant, multi-provider)
-const { registerAllProviders, configureProviderCommand, removeProviderKeyCommand } = require('./src/chat/providerRegistry');
+const { registerAllProviders } = require('./src/chat/providerRegistry');
 const { registerChatParticipant } = require('./src/chat/chatParticipant');
 const {
     selectDatabaseCommand,
@@ -56,11 +56,7 @@ const {
     formatStatusBarText,
     formatStatusBarTooltip
 } = require('./src/chat/databaseSelection');
-const { setupArcadeDbConnectionCommand } = require('./src/chat/mcpSetup');
-const {
-    configureConnectionCommand,
-    removeConnectionPasswordCommand
-} = require('./src/chat/connectionSettings');
+const { openSettingsPanel } = require('./src/chat/settingsPanel');
 
 let lspClient;
 let lspStatusItem;
@@ -806,20 +802,22 @@ function activate(context) {
         chatDatabaseStatusItem.show();
         context.subscriptions.push(chatDatabaseStatusItem);
 
+        // A página de configuração é o ÚNICO caminho. Os seis comandos que
+        // pediam servidor, senha e chave de API em `InputBox` encadeados foram
+        // removidos: cada um cobria um pedaço, nenhum dizia qual era o próximo,
+        // e a página de settings repetia parte deles — a duplicação que fazia
+        // "configurei e continua pedindo" parecer um defeito sem fim.
+        //
+        // `synesis.chat.reconnect` também saiu: ele existia para reiniciar o
+        // servidor MCP, e o chat já não depende de um.
         context.subscriptions.push(
-            vscode.commands.registerCommand('synesis.chat.configureProvider', () => configureProviderCommand(context)),
-            vscode.commands.registerCommand('synesis.chat.removeProviderKey', () => removeProviderKeyCommand(context)),
+            vscode.commands.registerCommand('synesis.openSettings', () =>
+                openSettingsPanel(context, {
+                    onChanged: () => updateChatDatabaseStatus(getSelectedDatabase(context))
+                })
+            ),
             vscode.commands.registerCommand('synesis.chat.selectDatabase', () =>
                 selectDatabaseCommand(context, updateChatDatabaseStatus)
-            ),
-            vscode.commands.registerCommand('synesis.chat.setupArcadeDbConnection', () =>
-                setupArcadeDbConnectionCommand(context)
-            ),
-            vscode.commands.registerCommand('synesis.chat.configureConnection', () =>
-                configureConnectionCommand(context)
-            ),
-            vscode.commands.registerCommand('synesis.chat.removeConnectionPassword', () =>
-                removeConnectionPasswordCommand(context)
             )
         );
     } catch (error) {

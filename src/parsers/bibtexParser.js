@@ -7,6 +7,7 @@
  * Componentes principais:
  *     - parse: Retorna entries BibTeX
  *     - findEntry: Busca entry por bibref
+ *     - findEntryInFiles: Busca entry em vários .bib (primeira ocorrência)
  *     - getAbstract: Extrai o abstract do entry
  */
 
@@ -43,6 +44,34 @@ function findEntry(entries, bibref) {
 }
 
 /**
+ * Busca entry por bibref em vários arquivos .bib, na ordem dada.
+ *
+ * Vale a primeira ocorrência, como no compilador. Lê um arquivo por vez e para
+ * ao encontrar: com um .bib por docente, a maioria das buscas não abre todos.
+ * Arquivo ilegível é pulado — os demais ainda podem ter a entrada.
+ *
+ * @param {string[]} bibPaths
+ * @param {string} bibref
+ * @returns {Promise<Object|null>}
+ */
+async function findEntryInFiles(bibPaths, bibref) {
+    for (const bibPath of bibPaths || []) {
+        let entries;
+        try {
+            entries = await parse(bibPath);
+        } catch (error) {
+            console.warn('Bibliography not readable:', bibPath, error?.message);
+            continue;
+        }
+        const entry = findEntry(entries, bibref);
+        if (entry) {
+            return entry;
+        }
+    }
+    return null;
+}
+
+/**
  * Extrai abstract de um entry
  * @param {Object} entry
  * @returns {string|null}
@@ -60,5 +89,6 @@ function normalizeKey(value) {
 module.exports = {
     parse,
     findEntry,
+    findEntryInFiles,
     getAbstract
 };

@@ -16,6 +16,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { expandIncludesOfType } = require('./includeExpander');
 
 /**
  * Carrega um arquivo .synp e retorna metadados do projeto
@@ -36,26 +37,34 @@ async function load(projectUri) {
 
     const projectDir = path.dirname(projectPath);
     const templateToken = parsed.template || parsed.fields.template || null;
-    const bibliographyToken = selectInclude(parsed.includes, 'BIBLIOGRAPHY') || parsed.fields.bibliography || null;
 
     const templatePath = templateToken
         ? path.resolve(projectDir, templateToken)
         : null;
-    const bibliographyPath = bibliographyToken
-        ? path.resolve(projectDir, bibliographyToken)
-        : null;
     const includes = parsed.includes.map(include => ({
         type: include.type,
         path: include.path,
+        shared: include.shared,
         absolutePath: path.resolve(projectDir, include.path)
     }));
+
+    // Todos os .bib do projeto — várias linhas INCLUDE BIBLIOGRAPHY, curinga ou
+    // pasta —, na ordem e pela regra do compilador (synesis >= 0.13). Antes só a
+    // PRIMEIRA linha contava, e um curinga virava o caminho literal `fontes/*.bib`.
+    let bibliographyPaths = expandIncludesOfType(projectDir, includes, 'BIBLIOGRAPHY');
+    if (bibliographyPaths.length === 0 && parsed.fields.bibliography) {
+        // Forma antiga `bibliography: arquivo.bib`, fora de INCLUDE.
+        bibliographyPaths = [path.resolve(projectDir, parsed.fields.bibliography)];
+    }
 
     return {
         path: projectPath,
         dir: projectDir,
         name: parsed.name || parsed.fields.name || null,
         templatePath,
-        bibliographyPath,
+        bibliographyPaths,
+        // Compatibilidade: o primeiro .bib. Use bibliographyPaths.
+        bibliographyPath: bibliographyPaths[0] || null,
         includes,
         metadata: parsed.metadata,
         description: parsed.description,
@@ -147,13 +156,16 @@ function extractSingleDirective(content, directive) {
 
 function extractIncludes(content) {
     const includes = [];
-    const pattern = /^\s*INCLUDE\s+([A-Z_]+)\s+("([^"]+)"|([^\s#]+))/gmi;
+    // `SHARED` é opcional (INCLUDE SHARED ONTOLOGY "../comum.syno"). Sem este
+    // grupo, a linha virava tipo `SHARED` com caminho `ONTOLOGY`.
+    const pattern = /^\s*INCLUDE\s+(SHARED\s+)?([A-Z_]+)\s+("([^"]+)"|([^\s#]+))/gmi;
 
     let match;
     while ((match = pattern.exec(content)) !== null) {
         includes.push({
-            type: match[1].toUpperCase(),
-            path: match[3] || match[4]
+            type: match[2].toUpperCase(),
+            path: match[4] || match[5],
+            shared: Boolean(match[1])
         });
     }
 
@@ -189,15 +201,6 @@ function stripBlocks(content, blockNames) {
     return result;
 }
 
-function selectInclude(includes, type) {
-    if (!Array.isArray(includes)) {
-        return null;
-    }
-
-    const target = includes.find(include => include.type === type);
-    return target ? target.path : null;
-}
-
 /**
  * Normaliza caminho do projeto
  * @private
@@ -217,5 +220,7 @@ function resolveProjectPath(projectUri) {
 }
 
 module.exports = {
-    load
+    load,
+    // exposto para teste
+    extractIncludes
 };

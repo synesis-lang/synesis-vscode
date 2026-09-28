@@ -56,12 +56,46 @@ function toAnthropicTools(tools) {
 }
 
 class AnthropicModelProvider {
-    constructor(getApiKey) {
+    /** `discoverModels` opcional; sem ela vale a lista fixa `MODELS`. */
+    constructor(getApiKey, discoverModels) {
         this.getApiKey = getApiKey;
+        this.discoverModels = discoverModels;
+        // Sem este evento o seletor nao atualiza: o VSCode guarda a lista de
+        // modelos e so volta a perguntar quando o provider avisa que ela mudou.
+        this._onDidChange = new vscode.EventEmitter();
+        this.onDidChangeLanguageModelChatInformation = this._onDidChange.event;
     }
 
-    provideLanguageModelChatInformation(_options, _token) {
-        return MODELS.map((m) => ({
+    /** Avisa o editor que a lista mudou, para ele reconsultar os modelos. */
+    refresh() {
+        this._onDidChange.fire();
+    }
+
+    dispose() {
+        this._onDidChange.dispose();
+    }
+
+    async provideLanguageModelChatInformation(_options, _token) {
+        // Sem chave o provedor nao responde: nao deve povoar o seletor com
+        // modelos que falhariam so na hora do uso.
+        if (!(await this.getApiKey())) {
+            return [];
+        }
+        let models = MODELS;
+        if (this.discoverModels) {
+            try {
+                const discovered = await this.discoverModels();
+                if (Array.isArray(discovered) && discovered.length > 0) {
+                    models = discovered;
+                }
+            } catch (error) {
+                console.warn(
+                    'Synesis Chat: catálogo Anthropic indisponível, usando a lista fixa.',
+                    error && error.message
+                );
+            }
+        }
+        return models.map((m) => ({
             id: m.id,
             name: m.name,
             tooltip: 'Anthropic API direta.',
@@ -69,7 +103,7 @@ class AnthropicModelProvider {
             maxInputTokens: m.maxInputTokens,
             maxOutputTokens: m.maxOutputTokens,
             version: '1.0.0',
-            capabilities: { toolCalling: true, imageInput: false }
+            capabilities: { toolCalling: m.toolCalling !== false, imageInput: false }
         }));
     }
 

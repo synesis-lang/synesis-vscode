@@ -66,23 +66,85 @@ class LanguageModelToolResultPart {
 const stub = {
     Uri: {
         parse: (uri) => ({ fsPath: uri.replace(/^file:\/\//, '') }),
-        file: (fsPath) => ({ fsPath, scheme: 'file' })
+        file: (fsPath) => ({ fsPath, scheme: 'file' }),
+        // Usa `path.posix` para que o caminho gerado seja o mesmo nas três
+        // plataformas: os testes do `mcp.json` comparam o caminho como string,
+        // e um separador dependente do SO faria a asserção passar só no Windows.
+        joinPath: (base, ...parts) => ({
+            fsPath: path.posix.join(String(base && base.fsPath).replace(/\\/g, '/'), ...parts),
+            scheme: 'file'
+        })
     },
+    ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
     Position,
     Range,
     Location,
     Selection: class Selection extends Range {},
     window: {
         activeTextEditor: null,
-        showWarningMessage: () => {}
+        showWarningMessage: () => {},
+        showInformationMessage: () => {},
+        showErrorMessage: () => {},
+        showInputBox: async () => undefined,
+        showQuickPick: async () => undefined,
+        showTextDocument: async () => undefined
     },
     workspace: {
         workspaceFolders: null,
-        getWorkspaceFolder: () => null
+        getWorkspaceFolder: () => null,
+        // Configuracao em memoria: `_config` guarda os valores por chave
+        // completa ("secao.chave"), que e como os testes os declaram.
+        _config: new Map(),
+        getConfiguration: (section) => ({
+            get: (key) => stub.workspace._config.get(section ? section + '.' + key : key),
+            update: async (key, value) => {
+                stub.workspace._config.set(section ? section + '.' + key : key, value);
+            }
+        }),
+        onDidChangeConfiguration: () => ({ dispose() {} }),
+        openTextDocument: async () => ({}),
+        // Sistema de arquivos em memória. `readFile` rejeitando é o sinal de
+        // "não existe" que `readExistingMcpConfig` interpreta — o mesmo contrato
+        // do `vscode.workspace.fs` real.
+        fs: {
+            _files: new Map(),
+            readFile: async (uri) => {
+                const found = stub.workspace.fs._files.get(uri.fsPath);
+                if (found === undefined) {
+                    throw new Error('ENOENT');
+                }
+                return Buffer.from(found, 'utf8');
+            },
+            writeFile: async (uri, content) => {
+                stub.workspace.fs._files.set(uri.fsPath, Buffer.from(content).toString('utf8'));
+            },
+            createDirectory: async () => undefined
+        }
+    },
+    // Emissor de evento: os providers de modelo o usam para avisar o editor
+    // que a lista de modelos mudou.
+    EventEmitter: class EventEmitter {
+        constructor() { this._handlers = []; }
+        get event() {
+            return (handler) => {
+                this._handlers.push(handler);
+                return { dispose: () => {} };
+            };
+        }
+        fire(value) { this._handlers.forEach((h) => h(value)); }
+        dispose() { this._handlers = []; }
     },
     LanguageModelTextPart,
     LanguageModelToolCallPart,
     LanguageModelToolResultPart,
+    // O que `invokeGraphTool` devolve: mesmo shape do resultado de uma
+    // ferramenta MCP, para que o restante do chat não distinga os dois caminhos.
+    LanguageModelToolResult: class LanguageModelToolResult {
+        constructor(content) {
+            this.content = content;
+        }
+    },
+    FileType: { Unknown: 0, File: 1, Directory: 2, SymbolicLink: 64 },
     // `tools` e `invokeTool` são substituídos pelo teste que precisa deles;
     // o padrão é "nenhuma ferramenta disponível", que é o caminho de
     // degradação que o chat tem de suportar de qualquer forma.

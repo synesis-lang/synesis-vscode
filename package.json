@@ -2,7 +2,7 @@
   "name": "synesis",
   "displayName": "Synesis",
   "description": "Knowledge Engineering in VS Code: Official LSP client for Synesis.",
-  "version": "0.13.0",
+  "version": "0.14.0",
   "publisher": "synesis-lang",
   "author": "Christian Maciel De Britto",
   "license": "MIT",
@@ -163,24 +163,8 @@
     },
     "commands": [
       {
-        "command": "synesis.chat.configureProvider",
-        "title": "Synesis: Configurar Provedor de IA (Anthropic / OpenAI / Gemini / OpenRouter)"
-      },
-      {
-        "command": "synesis.chat.removeProviderKey",
-        "title": "Synesis: Remover API Key de Provedor de IA"
-      },
-      {
-        "command": "synesis.chat.configureConnection",
-        "title": "Synesis: Configurar Conexão do Banco (ArcadeDB)"
-      },
-      {
-        "command": "synesis.chat.removeConnectionPassword",
-        "title": "Synesis: Remover Senha do Banco"
-      },
-      {
         "command": "synesis.chat.selectDatabase",
-        "title": "Synesis: Selecionar Banco do Chat"
+        "title": "Synesis: Selecionar Banco de Grafos do Chat"
       },
       {
         "command": "synesis.chat.auditTrail",
@@ -195,8 +179,9 @@
         "title": "Synesis: Métricas do Chat (comparar modelos)"
       },
       {
-        "command": "synesis.chat.setupArcadeDbConnection",
-        "title": "Synesis: Conectar ao ArcadeDB (MCP)"
+        "command": "synesis.openSettings",
+        "title": "Synesis: Configuração",
+        "icon": "$(gear)"
       },
       {
         "command": "synesis.lsp.loadProject",
@@ -546,40 +531,8 @@
           "synesisExplorer.chat.credentials": {
             "type": "null",
             "default": null,
-            "markdownDescription": "**Chaves de API e senha do banco não ficam aqui.** Elas são guardadas criptografadas pelo sistema operacional, fora dos arquivos do projeto — um `settings.json` é texto puro, sincroniza entre máquinas e é legível por outras extensões.\n\n- [Configurar provedor de IA](command:synesis.chat.configureProvider) — Anthropic, OpenAI, Gemini ou OpenRouter\n- [Configurar conexão do banco](command:synesis.chat.configureConnection) — servidor, usuário e senha\n- [Conectar ao ArcadeDB (MCP)](command:synesis.chat.setupArcadeDbConnection) — grava a conexão no workspace\n- [Selecionar banco do chat](command:synesis.chat.selectDatabase)",
+            "markdownDescription": "### [⚙️ Abrir a página de configuração do Synesis](command:synesis.openSettings)\n\nÉ lá que ficam **todas** as credenciais do chat `@synesis`, em campos normais — inclusive senhas e chaves de API, que não podem aparecer aqui.\n\nO chat combina **duas coisas independentes**:\n\n- 🗄️ **Banco de grafos** — onde o *seu corpus* está (ArcadeDB ou Neo4j). É de lá que saem os trechos e referências que sustentam cada resposta.\n- 🤖 **Provedor de IA** — qual modelo *lê e redige* (Anthropic, OpenAI, Gemini, OpenRouter). Não guarda o seu corpus: sem uma conexão de grafo, o chat se recusa a responder sobre os dados.\n\n**Por que as senhas não aparecem aqui:** esta página grava em `settings.json`, que é texto puro, sincroniza entre máquinas e é legível por outras extensões. O VSCode não oferece campo de senha — por isso o Synesis tem página própria, gravando no cofre criptografado do sistema operacional.",
             "scope": "application"
-          },
-          "synesisExplorer.chat.preferredProvider": {
-            "type": "string",
-            "enum": [
-              "",
-              "anthropic",
-              "openai",
-              "gemini",
-              "openrouter"
-            ],
-            "enumDescriptions": [
-              "Nenhum — escolha o modelo na própria caixa de chat.",
-              "Anthropic (Claude)",
-              "OpenAI (GPT)",
-              "Google Gemini",
-              "OpenRouter — inclui modelos gratuitos"
-            ],
-            "default": "",
-            "description": "Provedor de IA preferido do @synesis. Só aparece no seletor de modelo depois de configurar a chave correspondente.",
-            "scope": "application"
-          },
-          "synesisExplorer.chat.arcadedb.uri": {
-            "type": "string",
-            "default": "http://localhost:2480",
-            "scope": "machine",
-            "description": "Endpoint HTTP do servidor ArcadeDB que o chat @synesis consulta (a porta 2480 também serve o Studio). Machine-scoped: um workspace não confiável não pode redirecionar a conexão para outro host."
-          },
-          "synesisExplorer.chat.arcadedb.user": {
-            "type": "string",
-            "default": "root",
-            "scope": "machine",
-            "description": "Usuário do ArcadeDB usado pelo chat. A senha NÃO fica aqui — é guardada criptografada pelo comando \"Synesis: Configurar Conexão do Banco\". Prefira um usuário só de leitura: o chat não precisa escrever no grafo."
           },
           "synesisExplorer.chat.showMetricsButton": {
             "type": "boolean",
@@ -593,6 +546,33 @@
             "maximum": 40,
             "markdownDescription": "Quantas consultas ao banco o assistente pode encadear numa resposta.\n\nO limite existe para conter um modelo que entrou em laço, não para economizar chamadas: perguntas que atravessam conceito → trecho → referência gastam várias consultas antes da útil. Abaixo de 8 as respostas ficam incompletas.",
             "scope": "application"
+          },
+          "synesisExplorer.chat.openRouterModels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "default": [],
+            "markdownDescription": "Modelos do OpenRouter a oferecer no seletor de chat, por id (ex.: `liquid/lfm-2.5-2.6b:free`).\n\nO OpenRouter publica centenas de modelos; em vez de listá-los todos, declare aqui os que quer testar. Nome, janela de contexto e suporte a *tool-calling* sao lidos do catalogo publico do OpenRouter — nao e preciso informa-los.\n\nOs modelos declarados aqui SUBSTITUEM a lista padrao do provedor."
+          },
+          "synesisExplorer.chat.discoverModels": {
+            "type": "boolean",
+            "default": true,
+            "markdownDescription": "Descobrir os modelos disponiveis consultando cada provedor (Anthropic, OpenAI, Gemini), em vez de usar a lista fixa da extensao.\n\nDesligue para manter o seletor estavel durante uma campanha de medicao, ou quando a rede/proxy bloquear as consultas de catalogo. Com a descoberta desligada, valem as listas internas."
+          },
+          "synesisExplorer.chat.arcadedb.uri": {
+            "type": "string",
+            "default": "http://localhost:2480",
+            "scope": "machine",
+            "markdownDescription": "**Legado — só para migração.** Endpoint do ArcadeDB da versão anterior, importado como perfil de conexão. Configure conexões na [página de configuração](command:synesis.openSettings).\n\nContinua declarada, com escopo `machine`, por segurança: sem a declaração, um workspace não confiável poderia gravar este valor no próprio `settings.json` e redirecionar a conexão — com a senha guardada no cofre — para outro host.",
+            "deprecationMessage": "Legado: configure conexões na página de configuração do Synesis."
+          },
+          "synesisExplorer.chat.arcadedb.user": {
+            "type": "string",
+            "default": "root",
+            "scope": "machine",
+            "markdownDescription": "**Legado — só para migração.** Usuário do ArcadeDB da versão anterior, importado como perfil de conexão. Configure conexões na [página de configuração](command:synesis.openSettings).",
+            "deprecationMessage": "Legado: configure conexões na página de configuração do Synesis."
           }
         }
       },
@@ -711,6 +691,7 @@
   },
   "dependencies": {
     "bibtex-parse-js": "^0.0.24",
+    "neo4j-driver": "^6.2.0",
     "vscode-languageclient": "^9.0.0"
   },
   "devDependencies": {

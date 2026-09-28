@@ -88,15 +88,63 @@ class OpenAiCompatibleModelProvider {
      * @param {Array<{id:string,name:string,maxInputTokens:number,maxOutputTokens:number}>} config.models
      * @param {() => Promise<string|undefined>} config.getApiKey
      */
-    constructor({ vendorLabel, baseUrl, models, getApiKey }) {
+    /**
+     * `discoverModels` é opcional: quando presente, é ela que decide a lista, e
+     * `models` passa a ser o fallback de quando a descoberta falha (rede fora,
+     * chave inválida, formato inesperado). Sem ela o provider se comporta como
+     * antes — lista fixa —, que é o que mantém os testes existentes válidos.
+     */
+    constructor({ vendorLabel, baseUrl, models, getApiKey, discoverModels }) {
         this.vendorLabel = vendorLabel;
         this.baseUrl = baseUrl;
         this.models = models;
         this.getApiKey = getApiKey;
+        this.discoverModels = discoverModels;
+
+        // **Sem este evento o seletor não atualiza.**
+        //
+        // `provideLanguageModelChatInformation` é consultado quando o VSCode
+        // decide, não a cada abertura do seletor: o editor guarda a lista e só
+        // volta a perguntar quando o provider AVISA que ela mudou. Sem o evento,
+        // salvar um modelo novo no painel não produzia efeito nenhum até
+        // recarregar a janela — o sintoma observado com o OpenRouter.
+        this._onDidChange = new vscode.EventEmitter();
+        this.onDidChangeLanguageModelChatInformation = this._onDidChange.event;
     }
 
-    provideLanguageModelChatInformation(_options, _token) {
-        return this.models.map((m) => ({
+    /** Avisa o editor que a lista mudou, para ele reconsultar os modelos. */
+    refresh() {
+        this._onDidChange.fire();
+    }
+
+    dispose() {
+        this._onDidChange.dispose();
+    }
+
+    async provideLanguageModelChatInformation(_options, _token) {
+        // Sem chave o provedor não responde, então não deve povoar o seletor:
+        // um modelo que aparece e falha só ao ser usado é pior que um ausente.
+        // (O registry já documentava este contrato, mas nada o implementava.)
+        if (!(await this.getApiKey())) {
+            return [];
+        }
+        let models = this.models;
+        if (this.discoverModels) {
+            try {
+                const discovered = await this.discoverModels();
+                if (Array.isArray(discovered) && discovered.length > 0) {
+                    models = discovered;
+                }
+            } catch (error) {
+                // Catálogo indisponível não pode esvaziar o seletor: cair na
+                // lista fixa mantém o chat utilizável.
+                console.warn(
+                    `Synesis Chat: catálogo ${this.vendorLabel} indisponível, usando a lista fixa.`,
+                    error && error.message
+                );
+            }
+        }
+        return models.map((m) => ({
             id: m.id,
             name: m.name,
             tooltip: `${this.vendorLabel} API direta.`,
@@ -104,7 +152,11 @@ class OpenAiCompatibleModelProvider {
             maxInputTokens: m.maxInputTokens,
             maxOutputTokens: m.maxOutputTokens,
             version: '1.0.0',
-            capabilities: { toolCalling: true, imageInput: false }
+            // Declarado pelo catálogo quando ele informa (o OpenRouter publica
+            // `supported_parameters`). Antes era `true` fixo para todo modelo —
+            // uma promessa que ninguém verificava, e o chat inteiro depende
+            // dela: sem tool-calling o modelo responde sem consultar o banco.
+            capabilities: { toolCalling: m.toolCalling !== false, imageInput: false }
         }));
     }
 

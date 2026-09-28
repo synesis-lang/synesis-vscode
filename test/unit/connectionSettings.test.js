@@ -1,9 +1,14 @@
 'use strict';
 
 /**
- * Testes da conexão configurada dentro do VSCode (Fase 4.6).
+ * Testes da LEITURA da conexão da versão anterior.
  *
- * A regra que estes testes protegem: **a senha nunca vai para setting nem para
+ * Este módulo já foi o dono da configuração; hoje sobra a leitura, e ela existe
+ * para um fim só: quem já tinha o chat funcionando não pode perdê-lo ao
+ * atualizar. `migrateLegacyConnection` importa o que estes testes garantem que
+ * ainda é legível. A configuração em si vive em `connectionProfiles.js`.
+ *
+ * A regra que continua valendo: **a senha nunca vai para setting nem para
  * arquivo do workspace** — só para `context.secrets`. Não é precaução teórica.
  * Dois vazamentos reais já ocorreram neste ecossistema: a chave da Anthropic
  * saiu de um `settings.json` em texto puro para o contexto de outra ferramenta

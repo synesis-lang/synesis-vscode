@@ -10,6 +10,13 @@ const vscode = require('vscode');
 const { AnthropicModelProvider } = require('./providers/anthropicModelProvider');
 const { OpenAiCompatibleModelProvider } = require('./providers/openAiCompatibleModelProvider');
 const { GeminiModelProvider } = require('./providers/geminiModelProvider');
+const {
+    CatalogCache,
+    fetchAnthropicModels,
+    fetchGeminiModels,
+    fetchOpenAiModels,
+    fetchOpenRouterModels
+} = require('./modelCatalog');
 
 const SECRET_KEYS = {
     anthropic: 'synesis.apiKey.anthropic',
@@ -65,27 +72,121 @@ function getApiKeyGetter(context, providerId) {
     return () => context.secrets.get(SECRET_KEYS[providerId]);
 }
 
+/**
+ * Modelos do OpenRouter que o pesquisador declarou testar.
+ *
+ * Campo LIVRE, e não lista descoberta, porque o catálogo tem 424 modelos
+ * (verificado) — despejá-los no seletor do VSCode o tornaria inutilizável. Aqui
+ * o pesquisador nomeia o que quer, e os metadados vêm do catálogo público.
+ *
+ * Lido a cada consulta ao seletor, não na ativação: acrescentar um modelo à
+ * campanha não deve exigir recarregar a janela.
+ */
+function readOpenRouterModelIds() {
+    const raw = vscode.workspace.getConfiguration('synesisExplorer.chat').get('openRouterModels');
+    if (!Array.isArray(raw)) {
+        return [];
+    }
+    return raw.map((id) => String(id || '').trim()).filter(Boolean);
+}
+
+/**
+ * A descoberta está ligada?
+ *
+ * Desligá-la devolve as listas fixas — a saída para quem está sem rede, atrás
+ * de proxy, ou quer o seletor estável durante uma campanha de medição.
+ */
+function discoveryEnabled() {
+    const value = vscode.workspace
+        .getConfiguration('synesisExplorer.chat')
+        .get('discoverModels');
+    return value !== false;
+}
+
+/**
+ * Cache dos catálogos, compartilhado por todos os provedores.
+ *
+ * O seletor de modelo do VSCode chama `provideLanguageModelChatInformation`
+ * toda vez que é aberto; sem cache, cada abertura viraria uma ida à rede por
+ * provedor configurado.
+ */
+const catalogCache = new CatalogCache();
+
+/**
+ * Fábrica da função de descoberta de um provedor.
+ *
+ * Devolve `undefined` quando a descoberta está desligada — e aí o provider usa
+ * a lista fixa, que é o comportamento anterior.
+ */
+function buildDiscovery(providerId, getApiKey) {
+    if (providerId === 'openrouter') {
+        // Sem chave: o catálogo do OpenRouter é público, então a descoberta
+        // funciona mesmo antes de configurar a chave — o modelo só não responde.
+        return () => {
+            // A setting é lida A CADA consulta, não na construção do provider:
+            // desligar a descoberta (ou mudar a lista) deve valer na próxima
+            // abertura do seletor, sem recarregar a janela.
+            if (!discoveryEnabled()) {
+                return Promise.resolve([]);
+            }
+            const ids = readOpenRouterModelIds();
+            if (ids.length === 0) {
+                return Promise.resolve([]);
+            }
+            // A chave do cache inclui os ids: mudar a lista no settings deve
+            // valer na próxima abertura do seletor, não daqui a 30 minutos.
+            return catalogCache.resolve(`openrouter:${ids.join(',')}`, () =>
+                fetchOpenRouterModels(ids)
+            );
+        };
+    }
+    const fetchers = {
+        anthropic: fetchAnthropicModels,
+        openai: fetchOpenAiModels,
+        gemini: fetchGeminiModels
+    };
+    const fetcher = fetchers[providerId];
+    if (!fetcher) {
+        return undefined;
+    }
+    return async () => {
+        if (!discoveryEnabled()) {
+            return [];
+        }
+        const apiKey = await getApiKey();
+        if (!apiKey) {
+            // Sem chave o provedor já fica invisível no seletor; devolver vazio
+            // faz o provider manter a lista fixa sem tentar a rede.
+            return [];
+        }
+        return catalogCache.resolve(providerId, () => fetcher(apiKey));
+    };
+}
+
 function buildProvider(context, providerId) {
     const getApiKey = getApiKeyGetter(context, providerId);
+    const discoverModels = buildDiscovery(providerId, getApiKey);
     switch (providerId) {
         case 'anthropic':
-            return new AnthropicModelProvider(getApiKey);
+            return new AnthropicModelProvider(getApiKey, discoverModels);
         case 'openai':
             return new OpenAiCompatibleModelProvider({
                 vendorLabel: 'OpenAI',
                 baseUrl: 'https://api.openai.com/v1',
                 models: OPENAI_MODELS,
-                getApiKey
+                getApiKey,
+                discoverModels
             });
         case 'openrouter':
             return new OpenAiCompatibleModelProvider({
                 vendorLabel: 'OpenRouter',
                 baseUrl: 'https://openrouter.ai/api/v1',
                 models: OPENROUTER_MODELS,
-                getApiKey
+                getApiKey,
+                discoverModels
             });
         case 'gemini':
-            return new GeminiModelProvider(getApiKey);
+            return new GeminiModelProvider(getApiKey, discoverModels);
         default:
             throw new Error(`Provedor desconhecido: ${providerId}`);
     }
@@ -97,83 +198,57 @@ function buildProvider(context, providerId) {
  * fica invisível até o pesquisador configurar). */
 function registerAllProviders(context) {
     const disposables = [];
+    const instances = [];
     for (const provider of PROVIDERS) {
         const instance = buildProvider(context, provider.id);
+        instances.push(instance);
         disposables.push(vscode.lm.registerLanguageModelChatProvider(provider.vendor, instance));
     }
+
+    /**
+     * Faz o editor reconsultar os modelos de todos os provedores.
+     *
+     * O VSCode guarda a lista devolvida por
+     * `provideLanguageModelChatInformation` e só volta a perguntar quando o
+     * provider dispara `onDidChangeLanguageModelChatInformation`. Sem esta
+     * chamada, salvar um modelo do OpenRouter no painel não tinha efeito
+     * nenhum até recarregar a janela — o defeito observado.
+     */
+    const refreshAll = () => {
+        // O catálogo também precisa ser relido: a lista de ids mudou, e a
+        // entrada em cache é de outra lista.
+        catalogCache.invalidate();
+        for (const instance of instances) {
+            if (typeof instance.refresh === 'function') {
+                instance.refresh();
+            }
+        }
+    };
+
+    // Mudança pelo `settings.json` (ou por outra janela) vale tanto quanto a
+    // feita no painel: quem edita o JSON à mão espera o mesmo resultado.
+    disposables.push(
+        vscode.workspace.onDidChangeConfiguration((event) => {
+            if (
+                event.affectsConfiguration('synesisExplorer.chat.openRouterModels') ||
+                event.affectsConfiguration('synesisExplorer.chat.discoverModels')
+            ) {
+                refreshAll();
+            }
+        })
+    );
+
+    disposables.refreshProviders = refreshAll;
     return disposables;
 }
 
-/**
- * Provedor preferido, de `synesisExplorer.chat.preferredProvider`.
- *
- * A preferência não *escolhe* o modelo — quem escolhe é o seletor da caixa de
- * chat, que é do VSCode. O que ela faz é encurtar o caminho: o provedor
- * preferido aparece primeiro na lista de configuração, marcado. Vazio (o
- * padrão) mantém a ordem original.
- */
-function readPreferredProviderId() {
-    return String(
-        vscode.workspace.getConfiguration('synesisExplorer.chat').get('preferredProvider') || ''
-    ).trim();
-}
-
-/** Comando "Synesis: Configurar Provedor de IA" — QuickPick de provedor + InputBox de chave. */
-async function configureProviderCommand(context) {
-    const preferred = readPreferredProviderId();
-    const ordered = preferred
-        ? [...PROVIDERS].sort((a, b) => (b.id === preferred) - (a.id === preferred))
-        : PROVIDERS;
-
-    const picked = await vscode.window.showQuickPick(
-        ordered.map((p) => ({
-            label: p.label,
-            description: p.id === preferred ? `${p.id} — preferido` : p.id,
-            provider: p
-        })),
-        { placeHolder: 'Qual provedor de IA você quer configurar?' }
-    );
-    if (!picked) {
-        return;
-    }
-
-    const provider = picked.provider;
-    const existing = await context.secrets.get(SECRET_KEYS[provider.id]);
-    const key = await vscode.window.showInputBox({
-        prompt: `API key da ${provider.label} (${provider.keyHint})`,
-        password: true,
-        ignoreFocusOut: true,
-        value: existing ? '' : undefined,
-        placeHolder: existing ? 'Já configurada — digite uma nova para substituir, ou Esc para manter' : undefined,
-        validateInput: (v) => (v && !provider.validate(v) ? `Formato inesperado — esperado algo como ${provider.keyHint}` : null)
-    });
-
-    if (key) {
-        await context.secrets.store(SECRET_KEYS[provider.id], key);
-        vscode.window.showInformationMessage(
-            `Synesis: API key da ${provider.label} salva com segurança. O modelo já aparece no seletor de chat.`
-        );
-    }
-}
-
-/** Comando "Synesis: Remover API Key de Provedor" — limpeza explícita, útil após rotação de chave. */
-async function removeProviderKeyCommand(context) {
-    const picked = await vscode.window.showQuickPick(
-        PROVIDERS.map((p) => ({ label: p.label, description: p.id, provider: p })),
-        { placeHolder: 'Remover a API key de qual provedor?' }
-    );
-    if (!picked) {
-        return;
-    }
-    await context.secrets.delete(SECRET_KEYS[picked.provider.id]);
-    vscode.window.showInformationMessage(`Synesis: API key da ${picked.provider.label} removida.`);
-}
+// As chaves de API são gravadas e removidas pela página de configuração
+// (settingsPanel.js). Os comandos de QuickPick/InputBox que faziam isso saíram
+// na 0.14.0, e com eles a setting `preferredProvider`, que só ordenava o menu
+// de um deles — ver CHANGELOG, "um só caminho de configuração".
 
 module.exports = {
     registerAllProviders,
-    configureProviderCommand,
-    removeProviderKeyCommand,
-    readPreferredProviderId,
     PROVIDERS,
     SECRET_KEYS
 };

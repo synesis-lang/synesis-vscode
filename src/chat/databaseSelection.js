@@ -11,6 +11,14 @@
  */
 
 const vscode = require('vscode');
+const { readConnectionStatus, describeNextStep } = require('./connectionStatus');
+const {
+    getProfile,
+    getActiveProfileId,
+    readActiveConnection,
+    saveProfile
+} = require('./connectionProfiles');
+const { createGraphClient } = require('./graphClients');
 
 const SELECTED_DATABASE_KEY = 'synesis.chat.selectedDatabase';
 const LIST_DATABASES_TOOL = 'list_databases';
@@ -63,8 +71,19 @@ function parseDatabaseNames(toolResult) {
     return [...new Set(names)];
 }
 
-/** Banco escolhido para este workspace, ou undefined se ainda não houver. */
+/**
+ * Banco escolhido para este workspace, ou undefined se ainda não houver.
+ *
+ * O perfil ativo tem precedência: quando ele nomeia um banco, é esse o banco,
+ * porque foi a escolha mais recente e explícita do pesquisador. A chave antiga
+ * segue valendo como fallback para quem escolheu banco antes de existirem
+ * perfis — migrar em silêncio seria trocar o corpus consultado sem avisar.
+ */
 function getSelectedDatabase(context) {
+    const profile = getProfile(context, getActiveProfileId(context));
+    if (profile && profile.database) {
+        return profile.database;
+    }
     return context.workspaceState.get(SELECTED_DATABASE_KEY);
 }
 
@@ -100,18 +119,42 @@ function formatStatusBarText(database) {
 }
 
 function formatStatusBarTooltip(database) {
+    // "banco de grafos", e não só "banco": o item vizinho é o do LSP, e a
+    // distinção entre o corpus e o provedor de IA é o que o pesquisador precisa
+    // ter clara — são duas configurações independentes.
     return database
-        ? `Synesis Chat: @synesis consulta o banco "${database}". Clique para trocar.`
-        : 'Synesis Chat: nenhum banco selecionado. Clique para escolher.';
+        ? `Synesis: o chat @synesis consulta o banco de grafos "${database}". Clique para trocar.`
+        : 'Synesis: nenhum banco de grafos selecionado. Clique para escolher.';
 }
 
 /**
- * Comando "Synesis: Selecionar Banco do Chat".
+ * Comando "Synesis: Selecionar Banco de Grafos do Chat".
  *
- * A lista vem da ferramenta MCP real, não de constante no código: se o
- * pesquisador criar um banco novo, ele aparece aqui sem precisar de release.
+ * A lista vem do servidor real, não de constante no código: se o pesquisador
+ * criar um banco novo, ele aparece aqui sem precisar de release.
+ *
+ * Com perfil ativo, pergunta ao servidor do perfil diretamente. Sem perfil,
+ * cai no caminho MCP anterior — que continua valendo para quem ainda não
+ * migrou, e some quando não houver mais o que migrar.
  */
 async function selectDatabaseCommand(context, onChanged) {
+    const connection = await readActiveConnection(context);
+    if (connection) {
+        const client = createGraphClient(connection);
+        if (client) {
+            let databases;
+            try {
+                databases = await client.listDatabases();
+            } catch (error) {
+                // A mensagem do cliente já distingue "fora do ar" de "credencial
+                // recusada"; repeti-la é melhor que um genérico "falhou".
+                vscode.window.showErrorMessage(`Synesis: ${error.message || error}`);
+                return undefined;
+            }
+            return pickAndStore(context, databases, onChanged);
+        }
+    }
+
     try {
         await vscode.commands.executeCommand('workbench.mcp.startServer', '*', { waitForLiveTools: true });
     } catch (error) {
@@ -128,13 +171,20 @@ async function selectDatabaseCommand(context, onChanged) {
             (tool.name === LIST_DATABASES_TOOL || tool.name.endsWith(`_${LIST_DATABASES_TOOL}`))
     );
     if (!listTool) {
-        const action = 'Configurar conexão';
-        const choice = await vscode.window.showWarningMessage(
-            'Synesis: nenhum servidor MCP com list_databases encontrado. O ArcadeDB está no ar e configurado?',
-            action
-        );
-        if (choice === action) {
-            await vscode.commands.executeCommand('synesis.chat.setupArcadeDbConnection');
+        // Mesma razão do aviso no chat: oferecer "configurar conexão" a quem já
+        // configurou é o que fazia o pedido parecer não ter fim. `describeNextStep`
+        // separa credencial ausente de servidor que não respondeu, e cada caso
+        // ganha o botão que de fato o resolve.
+        const next = describeNextStep(await readConnectionStatus(context, false));
+        if (!next) {
+            return undefined;
+        }
+        // Sem markdown: `showWarningMessage` mostra os asteriscos e as crases
+        // cruas. A mensagem é a mesma; só o realce sai.
+        const plain = next.message.replace(/\*\*/g, '').replace(/`/g, '');
+        const choice = await vscode.window.showWarningMessage(`Synesis: ${plain}`, next.title);
+        if (choice === next.title) {
+            await vscode.commands.executeCommand(next.command);
         }
         return undefined;
     }
@@ -148,8 +198,13 @@ async function selectDatabaseCommand(context, onChanged) {
         return undefined;
     }
 
-    if (databases.length === 0) {
-        vscode.window.showWarningMessage('Synesis: o servidor MCP não devolveu nenhum banco.');
+    return pickAndStore(context, databases, onChanged);
+}
+
+/** A escolha em si, comum aos dois caminhos. */
+async function pickAndStore(context, databases, onChanged) {
+    if (!databases || databases.length === 0) {
+        vscode.window.showWarningMessage('Synesis: o servidor não devolveu nenhum banco de grafos.');
         return undefined;
     }
 
@@ -159,14 +214,23 @@ async function selectDatabaseCommand(context, onChanged) {
             label: name,
             description: name === current ? '(atual)' : undefined
         })),
-        { placeHolder: 'Qual banco o @synesis deve consultar?' }
+        { placeHolder: 'Qual banco de grafos o @synesis deve consultar?' }
     );
 
     if (!picked) {
         return undefined;
     }
 
+    // Grava no perfil ativo quando há um: é ele a fonte de verdade, e deixar a
+    // escolha só na chave antiga faria o painel mostrar um banco e o chat
+    // consultar outro.
+    const profileId = getActiveProfileId(context);
+    const profile = getProfile(context, profileId);
+    if (profile) {
+        await saveProfile(context, { ...profile, database: picked.label }, undefined);
+    }
     await setSelectedDatabase(context, picked.label);
+
     if (typeof onChanged === 'function') {
         onChanged(picked.label);
     }
@@ -182,5 +246,6 @@ module.exports = {
     buildSystemPromptWithDatabase,
     formatStatusBarText,
     formatStatusBarTooltip,
-    selectDatabaseCommand
+    selectDatabaseCommand,
+    pickAndStore
 };

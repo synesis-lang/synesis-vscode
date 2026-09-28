@@ -68,15 +68,7 @@ function createTurnTrace({ turnId, question, database, model, startedAt }) {
         // `request.model` expõe `id`, `name`, `vendor`, `family` e `version` na
         // API do VSCode instalada. Guardado achatado porque o objeto do modelo
         // não sobrevive fora do turno.
-        model: model
-            ? {
-                  id: model.id,
-                  name: model.name,
-                  vendor: model.vendor,
-                  family: model.family,
-                  version: model.version
-              }
-            : undefined,
+        model: flattenModel(model),
         startedAt: startedAt || new Date().toISOString(),
         finishedAt: undefined,
         // Quantas vezes `sendRequest()` foi chamado. Não é o mesmo que o número
@@ -95,6 +87,44 @@ function createTurnTrace({ turnId, question, database, model, startedAt }) {
         unanchorable: [],
         incomplete: false
     };
+}
+
+/**
+ * Achata a identidade de um modelo para caber no trace.
+ *
+ * O objeto `LanguageModelChat` nao sobrevive ao turno — a propria API adverte
+ * para nao segura-lo —, entao o que fica guardado sao cinco strings.
+ */
+function flattenModel(model) {
+    if (!model) {
+        return undefined;
+    }
+    return {
+        id: model.id,
+        name: model.name,
+        vendor: model.vendor,
+        family: model.family,
+        version: model.version
+    };
+}
+
+/**
+ * Reconfirma qual modelo esta respondendo este turno.
+ *
+ * `createTurnTrace` grava `request.model`, lido no INICIO do turno. Quando o
+ * pesquisador troca de modelo no meio da sessao, esse valor pode estar
+ * desatualizado, e o relatorio passa a nomear o modelo anterior — numa campanha
+ * que compara modelos, o turno e atribuido ao errado.
+ *
+ * Esta funcao e chamada com o objeto que efetivamente vai a `sendRequest`, no
+ * instante da chamada. So sobrescreve quando ha um `id`: um objeto incompleto
+ * nao deve apagar o que ja estava registrado.
+ */
+function captureModel(trace, model) {
+    if (!trace || !model || !model.id) {
+        return;
+    }
+    trace.model = flattenModel(model);
 }
 
 /**
@@ -262,6 +292,8 @@ class TurnTraceStore {
 }
 
 module.exports = {
+    captureModel,
+    flattenModel,
     MAX_TRACES,
     TurnKind,
     createTurnTrace,

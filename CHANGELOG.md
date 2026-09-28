@@ -7,6 +7,294 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-28
+
+### Adicionado — o chat consulta o banco direto, e agora fala Neo4j
+
+O chat tinha **um** caminho até o grafo: ferramentas MCP publicadas em
+`vscode.lm.tools`, reconhecidas por um filtro que procurava a string `arcade` no
+nome do servidor. Isso o amarrava a uma combinação — ArcadeDB, sobre TCP, com um
+`mcp.json` declarado à mão — e excluía o Neo4j por construção: nenhum servidor
+chamado `neo4j` casa com um filtro que exige `arcade`.
+
+- **O transporte agora vem do perfil ativo** (`src/chat/graphClients.js`): HTTP
+  para o ArcadeDB, Bolt para o Neo4j. Cada cliente expõe as mesmas quatro
+  operações, então o loop de tool-calling não sabe com quem está falando — e
+  `citationGuard`, `sourceAnchor` e a trilha de auditoria seguem intactos,
+  porque o payload continua chegando como texto JSON.
+- **Neo4j local e AuraDB**, com o `neo4j-driver` empacotado. Os inteiros de 64
+  bits do driver são convertidos: crus, chegariam ao modelo como
+  `{"low":42,"high":0}` e ele relataria a contagem errada com confiança.
+- **Somente leitura, por construção.** A superfície de ferramentas não tem
+  operação de escrita — não é uma verificação que se possa esquecer de fazer. O
+  conteúdo do corpus é texto não confiável, e a defesa é a ferramenta não estar
+  lá.
+- **O `.vscode/mcp.json` deixou de participar.** Com isso somem, de uma vez: a
+  credencial duplicada em Basic64 dentro do workspace, a dependência de o
+  servidor MCP ter subido nesta janela, e a divergência entre "configurado" e
+  "funcionando". O MCP que o próprio ArcadeDB serve continua existindo e útil
+  para outros clientes — o chat da extensão é que não precisa mais dele.
+- **Migração automática:** quem já tinha o chat funcionando tem a conexão antiga
+  importada como perfil na primeira consulta, sem perguntar nada.
+
+**Limitação declarada:** o ArcadeDB **embutido** é cadastrável e testável, mas o
+chat ainda não consulta por ele — a engine embutida é Java e não roda dentro do
+VSCode. A mensagem diz isso e sugere subir um servidor sobre a mesma pasta, em
+vez de falhar sem motivo aparente.
+
+### Alterado — um só caminho de configuração
+
+Seis comandos da paleta foram **removidos**: `Configurar Provedor de IA`,
+`Remover API Key`, `Configurar Conexão do Banco`, `Remover Senha do Banco`,
+`Conectar ao ArcadeDB (MCP)` e `Reconectar ao ArcadeDB`. Cada um cobria um
+pedaço, nenhum dizia qual era o próximo, e a página de settings repetia parte
+deles — a duplicação que fazia "configurei e continua pedindo" parecer um
+defeito sem fim. Tudo o que eles faziam está na página de configuração.
+
+As settings `synesisExplorer.chat.arcadedb.uri` e `.user` ficam **só como
+legado**, marcadas como obsoletas e lidas apenas para migrar a conexão antiga.
+Não saem ainda por segurança: é a declaração com escopo `machine` que impede um
+workspace não confiável de gravá-las no próprio `settings.json` e redirecionar a
+conexão, com a senha do cofre, para outro host. Saem junto com a migração.
+A setting `synesisExplorer.chat.preferredProvider` saiu: ela só ordenava o menu
+de um dos comandos removidos. `src/chat/mcpSetup.js` foi excluído e
+`connectionSettings.js` ficou reduzido à leitura de migração.
+
+### Alterado — banco de grafos e provedor de IA, claramente separados
+
+A confusão entre os dois leva o pesquisador a procurar o corpus na configuração
+do modelo. A página agora abre com as duas metades lado a lado, cada seção
+identificada pelo que ela é — 🗄️ **Banco de grafos** (*o seu corpus*) e 🤖
+**Provedor de IA** (*o modelo que conversa*) — e a página nativa de settings
+repete a mesma distinção.
+
+### Adicionado — página de configuração própria, com todos os campos
+
+A configuração vivia em dois lugares que se repetiam: a página nativa de
+settings mostrava servidor e usuário, e **senha e API keys eram pedidas em
+janelinhas** disparadas por comando. Nenhum dos dois era completo, e o processo
+aparecia duplicado.
+
+A causa é uma limitação da API do VSCode: a `configuration` só renderiza o que
+grava em `settings.json` — string, boolean, number, enum — e **não existe tipo
+"senha"**. Um segredo ali seria texto puro, sincronizado entre máquinas e
+legível por outras extensões. É o padrão da plataforma resolver isso com página
+própria, e é o que a extensão passa a ter.
+
+- **`Synesis: Configuração`** (`synesis.openSettings`) reúne tudo numa tela:
+  conexões, senhas, chaves de API e o banco. Os segredos são **campos normais**,
+  gravados no cofre criptografado do sistema operacional. O valor guardado nunca
+  volta para a tela — o campo aparece vazio com o rótulo "configurada", e salvar
+  sem tocá-lo preserva o que está lá.
+- **A página nativa de settings deixou de replicar o processo:** agora aponta
+  para a página própria e explica por que senha e chave não podem aparecer nela.
+
+### Adicionado — conexões nomeadas, e mais de um tipo de banco
+
+O modelo anterior guardava **uma** conexão de **um** backend: ArcadeDB sobre
+TCP, alcançado por um `mcp.json` escrito à mão. O ecossistema usa quatro
+combinações, e não havia onde guardar as outras três.
+
+- **Perfis nomeados**, com o ativo escolhido por projeto. Alternar entre o
+  corpus local e o remoto não exige mais redigitar credencial.
+- **Backends declarados, não adivinhados** (`src/chat/connectionProfiles.js`):
+  ArcadeDB servidor, ArcadeDB embutido e Neo4j (local e AuraDB), cada um com
+  seus próprios campos e validação. O vocabulário acompanha o
+  `synesis_graph/config.py`, para que os dois lados nomeiem a mesma coisa igual.
+  - O ArcadeDB recusa `bolt://` explicando que fala HTTP; o Neo4j aceita
+    `bolt://` e `neo4j+s://` da AuraDB.
+  - O modo embutido pede pasta, não credencial — e avisa quando o caminho aponta
+    para a pasta do banco em vez da raiz que contém `databases/`, a confusão que
+    no `synesis-graph` falha em silêncio.
+- **Botão "Testar conexão"** que prova de fato que funciona, distinguindo
+  "servidor não respondeu" de "credencial recusada". Antes nada no fluxo provava
+  nada. Cobre os dois modos do ArcadeDB; o teste do Neo4j chega com o suporte a
+  Bolt e diz isso, em vez de reportar uma falha que não houve.
+
+### Corrigido — a extensão criava um servidor MCP duplicado
+
+Ao gravar o `.vscode/mcp.json`, a extensão usava a chave fixa `arcadedb`. Um
+pesquisador que já tivesse o mesmo servidor declarado sob outro nome — o caso
+real era `arcadedb-face85` — não tinha sua conexão atualizada: ganhava uma
+**segunda** entrada para o mesmo endpoint, com credencial possivelmente
+diferente, e ambas casavam com o filtro de ferramentas do chat. A senha nova ia
+para uma; o chat podia continuar consultando pela outra.
+
+Agora a entrada existente para a mesma URL é atualizada no lugar, preservando o
+nome que o pesquisador escolheu.
+
+### Corrigido — configurar o servidor deixou de ser um labirinto
+
+Configurar a conexão com o ArcadeDB exigia **quatro comandos** na paleta, em
+ordem certa e sem nada dizer qual era. Quem parava no segundo — o que pede
+servidor, usuário e senha — tinha a credencial corretamente salva e o chat sem
+funcionar, porque o `.vscode/mcp.json` só era escrito pelo terceiro. E o aviso
+que aparecia então pedia *"configurar a conexão"*: a mesma frase, para quem
+acabara de configurá-la.
+
+- **Salvar a conexão conclui a configuração.** O comando **Synesis: Configurar
+  Conexão do Banco** agora grava o `.vscode/mcp.json`, reinicia o servidor MCP e
+  encadeia a escolha do banco. Não há segundo passo a descobrir.
+  - A escrita do arquivo é *best-effort*: sem pasta aberta, ou diante de um
+    `mcp.json` em JSONC que não pôde ser lido, a credencial continua salva e a
+    mensagem diz o que ficou pendente — em vez de um "conexão salva" que esconde
+    que o chat ainda não vai responder.
+  - Um `mcp.json` ilegível **nunca** é sobrescrito, agora também neste caminho
+    automático, que roda sem ninguém olhando.
+- **A senha nova alcança o `mcp.json`.** Trocar a senha atualizava o cofre e
+  deixava o arquivo autenticando com a anterior, em silêncio — a rotação de
+  credencial não surtia efeito até alguém rodar o comando certo por conta.
+- **Os avisos passaram a distinguir as causas** (`src/chat/connectionStatus.js`).
+  "Nenhuma ferramenta do ArcadeDB" tem três causas distintas — credencial nunca
+  configurada, pasta não aberta, servidor que não respondeu apesar de tudo estar
+  salvo — e cada uma agora nomeia a causa provável e oferece a ação que a
+  resolve. Com a credencial salva, o aviso diz que o problema **não** é a
+  configuração e mostra o endereço a conferir, em vez de mandar reconfigurar.
+- **Novo comando Synesis: Reconectar ao ArcadeDB** para o estado "está tudo
+  salvo e mesmo assim não responde": regrava o arquivo e reinicia o servidor,
+  sem perguntar nada.
+- **A aba de configuração da extensão explica o caminho.** Settings →
+  Extensions → Synesis agora abre com os dois passos numerados, diz por que
+  senha e chaves de API não aparecem como campos (esta página grava em
+  `settings.json`, que é texto puro e sincroniza entre máquinas), e reúne as
+  ações de recuperação num bloco separado.
+
+### Adicionado — o chat enxerga o que o banco guarda, não só o que ele declara
+
+O resumo de schema que vai ao prompt era montado a partir do `get_schema`, que
+lista apenas as propriedades **declaradas**. Uma propriedade gravada em todo
+vértice mas nunca declarada é invisível ali — e o modelo não pode consultar o
+que não sabe que existe.
+
+Não é hipótese. No `candidatos_quinto_andar` (ArcadeDB 26.9.1, 3.027 candidatos)
+o vértice `Source` declara 19 propriedades, todas textuais: `total_score`,
+`normalized_score`, `coverage` e `scored_criteria` **não aparecem em nenhuma**,
+apesar de gravadas como inteiros em todos os 3.027 vértices. Perguntado "qual
+candidato é mais bem pontuado", o modelo não via com o que ordenar e gastava as
+rodadas descobrindo por tentativa que um campo de pontuação sequer existia.
+
+- **Sondagem por amostragem** (`src/chat/observedProperties.js`): uma consulta
+  por vértice, unindo as chaves observadas às declaradas. O que o schema omite
+  entra no prompt com o tipo, marcado como observação amostral — não como
+  schema. Banco com schema completo não gera seção nenhuma.
+- **Número gravado como texto é advertido**, porque falha DURO: `sum()` sobre
+  `Item.score` devolve `sum() requires numeric input, but received a value of
+  type String`, e `ORDER BY` ordena "9" depois de "38".
+- **Chave de agrupamento ambígua**, o erro que falha em silêncio: 29 títulos são
+  compartilhados por dois ou mais candidatos ("Lucas Vieira" são três pessoas).
+  Um `GROUP BY title` soma os trechos das três e devolve um total que não
+  pertence a ninguém, sem erro visível. O aviso nomeia a chave única e só
+  dispara para campos QUASE-únicos — uma coluna com dois valores distintos é
+  categoria, não identificador.
+- **Mais de um campo de pontuação é apresentado, não eleito.** `total_score` e
+  `normalized_score` produzem ordens diferentes. Escolher por conta do
+  pesquisador é decidir o método dele — a mesma disciplina que `METRIC_HINTS` já
+  adota para centralidade.
+
+Vale para **qualquer** banco, inclusive grafos exportados por versões anteriores
+que ninguém vai reexportar: a correção no produtor (`synesis-graph`, declarar os
+campos `TYPE SCALE`) continua valendo e não substitui esta.
+
+### Adicionado — modelos do OpenRouter declarados pelo pesquisador
+
+O OpenRouter publica **424 modelos** (verificado no catálogo). A extensão
+oferecia quatro, fixos no código: testar qualquer outro exigia editar o fonte e
+reconstruir a extensão.
+
+- **Campo livre na página de configuração**, no card do OpenRouter: um id por
+  linha, uma caixa, um botão. Nome, janela de contexto e suporte a
+  *tool-calling* vêm do catálogo público — `maxInputTokens` errado faz o VSCode
+  truncar o prompt em silêncio, e é onde vivem o schema e as regras de contagem.
+- **Anthropic, OpenAI e Gemini descobrem os modelos pela própria API**, com a
+  lista fixa como fallback quando a rede ou a chave falham.
+  `synesisExplorer.chat.discoverModels: false` volta às listas internas — útil
+  para manter o seletor estável durante uma campanha de medição.
+- **`toolCalling` deixou de ser promessa.** Os três provedores anunciavam
+  `capabilities: { toolCalling: true }` fixo, sem verificar. O catálogo do
+  OpenRouter declara `supported_parameters`, e `tools` aparece em 358 dos 424 —
+  os outros 66 nunca chamariam ferramenta, e o chat inteiro depende disso.
+
+### Corrigido — o seletor de modelo não atualizava sem recarregar a janela
+
+Salvar um modelo novo não produzia efeito: o VSCode **guarda** a lista devolvida
+por `provideLanguageModelChatInformation` e só volta a perguntar quando o
+provider dispara `onDidChangeLanguageModelChatInformation` (`vscode.d.ts` 1.134).
+Nenhum dos provedores implementava o evento, então nada invalidava a lista
+guardada — um defeito latente desde que os provedores existem, que só ficou
+visível quando a lista passou a ser editável.
+
+Os três provedores agora emitem o evento, e a extensão o dispara tanto na
+gravação pelo painel quanto na edição direta do `settings.json`.
+
+### Corrigido — provedor sem chave oferecia modelos que falhariam
+
+O registry documentava que um provedor sem API key fica invisível no seletor,
+mas **nada implementava isso**: a chave só era consultada na hora de responder.
+Os modelos apareciam e falhavam depois da pergunta. Agora sem chave o provedor
+devolve lista vazia — o erro chega antes da pergunta, não depois.
+
+### Corrigido — argumento vazio virava um erro que o modelo não sabia ler
+
+Chamada de ferramenta sem o parâmetro obrigatório descia até o cliente como
+`undefined`; `JSON.stringify` descarta a chave, e o ArcadeDB respondia
+`HTTP 400 — "command missing"`. Observado com o `liquid/lfm-2.5-2.6b:free`: o
+modelo chamou `synesis_graph_query` sem preencher `query`, errou **duas vezes
+idênticas** e não tinha como se corrigir — o erro falava de `command`, campo do
+protocolo HTTP, enquanto o contrato que ele conhece declara `query`.
+
+A chamada agora é validada antes da rede e o erro nomeia o parâmetro do contrato
+do modelo, distinguindo ausente de vazio. Vale para os dois backends do perfil;
+o caminho MCP segue com a validação do próprio servidor.
+
+### Alterado — o custo de cada pergunta, e o que a trilha mostra
+
+- **Cache de prefetch por conexão + banco** (`src/chat/prefetchCache.js`). Cada
+  pergunta refazia `ProjectContext`, `get_schema` e a sondagem antes da primeira
+  palavra do modelo. A chave inclui o perfil: dois perfis apontando para bancos
+  homônimos — um local e um remoto — serviriam o schema errado sob o outro, a
+  pior falha possível aqui porque a resposta pareceria correta.
+- **Sondagem em paralelo**, com concorrência limitada e ordem de saída estável:
+  o prompt não pode variar conforme a ordem em que o servidor responde.
+- **A trilha separa consultas do modelo das leituras da extensão.** Somados, uma
+  melhoria que ENCURTA o laço aparecia como custo maior por ter acrescentado uma
+  leitura de prefetch — sem separar, nenhuma melhoria de rodadas é verificável.
+  Quando o prefetch vem do cache, a linha diz isso, em vez de um zero que se lê
+  como falta de contexto.
+- **Aviso quando a resposta não consultou o banco.** É o modo de falha típico do
+  modelo pequeno: texto plausível sobre o corpus sem nenhuma chamada de
+  ferramenta, hoje indistinguível de uma resposta boa. O aviso diz para tratar
+  como hipótese — e é o que torna legível uma campanha de "qual o menor modelo
+  que dá conta".
+
+### Corrigido — vários `.bib`, curingas e pastas no `.synp`
+
+O `synesis` 0.13 aceita arquivo, curinga ou pasta em todo `INCLUDE`, e várias
+linhas do mesmo tipo se somam. Isso permite organizar um corpus por lote, com um
+`.bib` por docente em `Sources/`. A extensão não acompanhava:
+
+- **A bibliografia lia só a primeira linha `INCLUDE BIBLIOGRAPHY`.** Um curinga
+  virava o caminho literal `fontes/*.bib`, e o painel de abstract não encontrava
+  nada.
+- **Um curinga em `INCLUDE ANNOTATIONS`/`ONTOLOGY` ia ao `findFiles` como caminho
+  absoluto**, que ele não casa. A lista caía no fallback "todos os `.syn` da
+  pasta", com arquivos que o projeto não declara.
+- **`INCLUDE SHARED ONTOLOGY "x"` era lido como tipo `SHARED`** e caminho
+  `ONTOLOGY`.
+
+Correções:
+
+- **`src/core/includeExpander.js`** (novo, sem dependências) espelha o
+  `expand_include` do compilador. Arquivo, curinga (`*`, `?`, `[...]`, `**`) ou
+  pasta recursiva pela extensão do tipo, restritos à pasta do projeto (exceto
+  `SHARED`), na mesma ordem que o compilador: sem diferenciar caixa, igual em
+  todos os sistemas.
+- **`projectLoader`** expõe `bibliographyPaths`, todos os `.bib` do projeto.
+  `bibliographyPath` continua valendo, como o primeiro deles. A regex dos
+  `INCLUDE` aceita `SHARED`.
+- **O painel de abstract procura a entrada em todos os `.bib`**, na ordem, e vale
+  a primeira ocorrência, como no compilador.
+- **`workspaceScanner`** passa a usar a mesma expansão para `.syn` e `.syno`.
+
 ## [0.13.0] - 2026-08-25
 
 ### Added — Chat `@synesis`: consulta ao grafo com trilha de auditoria
