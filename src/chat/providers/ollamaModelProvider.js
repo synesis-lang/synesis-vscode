@@ -15,6 +15,14 @@
  *
  * Sem API key: o provedor aparece no seletor quando há endereço configurado E o
  * servidor responde com ao menos um modelo.
+ *
+ * **Raciocínio e streaming são do pesquisador** (página de configuração): num
+ * laço de ferramentas o modelo local pensa a cada rodada, inclusive nas que só
+ * escolhem a próxima consulta — é o maior custo de tempo evitável. O streaming
+ * não encurta a rodada: evita o prazo de cabeçalhos do `fetch` (5 min) numa
+ * geração lenta e deixa o cancelamento agir no meio. Exibir o texto enquanto
+ * chega depende do laço do chat, que hoje retém cada rodada (ver
+ * `runToolCallingLoop`).
  */
 
 const vscode = require('vscode');
@@ -96,16 +104,109 @@ function parseArguments(raw) {
     }
 }
 
+/** Níveis aceitos na setting `ollama.think`. */
+const OLLAMA_THINK_LEVELS = ['default', 'off', 'low', 'medium', 'high'];
+
+/**
+ * Setting de raciocínio → valor do parâmetro `think` do Ollama, ou `undefined`
+ * para não enviá-lo.
+ *
+ * O parâmetro não é uniforme entre modelos:
+ * - o **gpt-oss** aceita níveis (`"low"`/`"medium"`/`"high"`) e não desliga o
+ *   raciocínio — `off` vira o nível mais baixo;
+ * - os demais aceitam só liga/desliga — qualquer nível vira `true`.
+ *
+ * Modelo que não declara `thinking` não recebe o parâmetro, nem `false`.
+ */
+function resolveOllamaThink(level, modelId, thinkingCapable) {
+    if (!thinkingCapable || !OLLAMA_THINK_LEVELS.includes(level) || level === 'default') {
+        return undefined;
+    }
+    if (/gpt-oss/i.test(modelId || '')) {
+        return level === 'off' ? 'low' : level;
+    }
+    return level !== 'off';
+}
+
+/**
+ * Linhas NDJSON de um corpo de resposta (stream web ou iterável assíncrono do
+ * Node). A última linha pode vir sem quebra.
+ */
+async function* readNdjson(body) {
+    const decoder = new TextDecoder();
+    let buffer = '';
+    const chunks = typeof body.getReader === 'function' ? iterateReader(body.getReader()) : body;
+    for await (const chunk of chunks) {
+        buffer += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
+        let newline;
+        while ((newline = buffer.indexOf('\n')) >= 0) {
+            const line = buffer.slice(0, newline).trim();
+            buffer = buffer.slice(newline + 1);
+            if (line) {
+                yield JSON.parse(line);
+            }
+        }
+    }
+    const rest = (buffer + decoder.decode()).trim();
+    if (rest) {
+        yield JSON.parse(rest);
+    }
+}
+
+async function* iterateReader(reader) {
+    try {
+        for (;;) {
+            const { done, value } = await reader.read();
+            if (done) {
+                return;
+            }
+            yield value;
+        }
+    } finally {
+        reader.releaseLock();
+    }
+}
+
+/** Preferências sem setting: o comportamento anterior (sem streaming, sem `think`). */
+const NO_REQUEST_SETTINGS = () => ({ stream: false, think: 'default' });
+
+/**
+ * Uma `message` do Ollama → partes do VSCode. Devolve o próximo índice de
+ * chamada, para que ids gerados não se repitam ao longo de um stream.
+ */
+function reportMessage(message, progress, callIndex) {
+    if (!message) {
+        return callIndex;
+    }
+    if (message.content) {
+        progress.report(new vscode.LanguageModelTextPart(message.content));
+    }
+    for (const call of message.tool_calls || []) {
+        const fn = call && call.function;
+        if (!fn || !fn.name) {
+            continue;
+        }
+        // Versões antigas do Ollama não mandam `id`; o VSCode exige um para
+        // casar a chamada com o resultado.
+        const callId = call.id || `ollama_${Date.now()}_${callIndex}`;
+        callIndex += 1;
+        progress.report(new vscode.LanguageModelToolCallPart(callId, fn.name, parseArguments(fn.arguments)));
+    }
+    return callIndex;
+}
+
 class OllamaModelProvider {
     /**
      * @param {object} config
      * @param {() => string} config.getBaseUrl endereço do servidor (vazio = desligado)
-     * @param {() => Promise<Array<{id,name,maxInputTokens,maxOutputTokens,toolCalling}>>} config.discoverModels
+     * @param {() => Promise<Array<{id,name,maxInputTokens,maxOutputTokens,toolCalling,thinking}>>} config.discoverModels
+     * @param {() => {stream: boolean, think: string}} [config.getRequestSettings] lido a cada pedido
      * @param {typeof fetch} [config.fetchImpl]
      */
-    constructor({ getBaseUrl, discoverModels, fetchImpl = fetch }) {
+    constructor({ getBaseUrl, discoverModels, getRequestSettings = NO_REQUEST_SETTINGS, fetchImpl = fetch }) {
         this.getBaseUrl = () => normalizeOllamaUrl(getBaseUrl());
         this.discoverModels = discoverModels;
+        this.getRequestSettings = getRequestSettings;
         this.fetchImpl = fetchImpl;
         this._onDidChange = new vscode.EventEmitter();
         this.onDidChangeLanguageModelChatInformation = this._onDidChange.event;
@@ -151,11 +252,15 @@ class OllamaModelProvider {
             throw new Error('Synesis Chat: configure o endereço do Ollama na página de configuração do Synesis.');
         }
 
+        const settings = this.getRequestSettings();
+        const stream = Boolean(settings.stream);
+        const think = resolveOllamaThink(settings.think, model.id, await this._isThinkingCapable(model.id));
+
         const body = {
             model: model.id,
             messages: toOllamaMessages(messages, options.modelOptions && options.modelOptions.system),
             tools: toOpenAiTools(options.tools),
-            stream: false,
+            stream,
             // A janela anunciada ao VSCode (entrada + saída) é exatamente a que se
             // pede ao servidor: o que o seletor promete é o que o Ollama aloca.
             options: {
@@ -163,6 +268,9 @@ class OllamaModelProvider {
                 num_predict: model.maxOutputTokens
             }
         };
+        if (think !== undefined) {
+            body.think = think;
+        }
 
         const controller = new AbortController();
         token.onCancellationRequested(() => controller.abort());
@@ -186,25 +294,35 @@ class OllamaModelProvider {
             throw new Error(`Ollama API error ${response.status}: ${await response.text()}`);
         }
 
-        const data = await response.json();
-        const message = data && data.message;
-        if (!message) {
+        if (!stream) {
+            const data = await response.json();
+            reportMessage(data && data.message, progress, 0);
             return;
         }
 
-        if (message.content) {
-            progress.report(new vscode.LanguageModelTextPart(message.content));
-        }
-        (message.tool_calls || []).forEach((call, index) => {
-            const fn = call && call.function;
-            if (!fn || !fn.name) {
-                return;
+        // Cada linha traz um pedaço de `content` (ou de `thinking`, que não vira
+        // texto) e, quando o modelo decide, as `tool_calls` completas.
+        let callIndex = 0;
+        for await (const chunk of readNdjson(response.body)) {
+            if (chunk && chunk.error) {
+                throw new Error(`Ollama API error: ${chunk.error}`);
             }
-            // Versões antigas do Ollama não mandam `id`; o VSCode exige um para
-            // casar a chamada com o resultado.
-            const callId = call.id || `ollama_${Date.now()}_${index}`;
-            progress.report(new vscode.LanguageModelToolCallPart(callId, fn.name, parseArguments(fn.arguments)));
-        });
+            callIndex = reportMessage(chunk && chunk.message, progress, callIndex);
+        }
+    }
+
+    /**
+     * O modelo aceita `think`? A resposta vem do catálogo (com cache), não do
+     * objeto `model`: o VSCode não garante devolver campos que não são dele.
+     */
+    async _isThinkingCapable(modelId) {
+        try {
+            const models = (await this.discoverModels()) || [];
+            const found = models.find((m) => m.id === modelId);
+            return Boolean(found && found.thinking);
+        } catch {
+            return false;
+        }
     }
 
     async provideTokenCount(_model, text, _token) {
@@ -215,7 +333,10 @@ class OllamaModelProvider {
 
 module.exports = {
     OllamaModelProvider,
+    OLLAMA_THINK_LEVELS,
+    resolveOllamaThink,
     // Exportados para teste unitário.
     toOllamaMessages,
-    parseArguments
+    parseArguments,
+    readNdjson
 };

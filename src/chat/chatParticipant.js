@@ -669,9 +669,14 @@ const CITATION_RULES =
     // eles no payload a âncora até o `.syn` (Etapa G) não tem o que ancorar.
     // Observado ao vivo. A tolerância continua existindo — mas como tratamento
     // de ERRO, na regra separada abaixo, não como alternativa oferecida de saída.
+    // Com alias: sem ele a coluna volta como `i.citation`. A extensão tolera
+    // (`evidence.evidenceGroups`), mas só a forma simples `var.campo` — uma
+    // expressão sem alias não tem como ser lida como trecho.
     '- When querying the corpus, **always** return in the SAME query, without ' +
-    'exception: `i.citation`, `i.source_file`, `i.source_line`, `i.item_id`, ' +
-    '`s.bibtex`, `s.title`, `s.year`. `source_file`/`source_line` are the trail ' +
+    'exception and with these aliases: `i.citation AS citation`, ' +
+    '`i.source_file AS source_file`, `i.source_line AS source_line`, ' +
+    '`i.item_id AS item_id`, `s.bibtex AS bibtex`, `s.title AS title`, ' +
+    '`s.year AS year`. `source_file`/`source_line` are the trail ' +
     'back to the annotation file — without them the researcher cannot verify ' +
     'your answer.\n' +
     '- Only if the query **fails** because a property does not exist (graph built ' +
@@ -763,7 +768,8 @@ const SYSTEM_PROMPT =
     'To go from a concept to its references, already bringing the evidence ' +
     '(replace `Chain` with the real label):\n' +
     '`MATCH (c:Chain)<-[:MENTIONS]-(i:Item)-[:FROM_SOURCE]->(s:Source)`\n' +
-    '`RETURN i.citation, i.source_file, i.source_line, s.bibtex, s.year`\n\n' +
+    '`RETURN i.citation AS citation, i.source_file AS source_file, ' +
+    'i.source_line AS source_line, s.bibtex AS bibtex, s.year AS year`\n\n' +
     'Working rules:\n' +
     // O bloco acima é o FALLBACK genérico. Quando a mensagem traz a seção
     // "Semântica do template deste projeto" (lida do vértice ProjectContext),

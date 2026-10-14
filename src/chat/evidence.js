@@ -24,6 +24,101 @@
 /** Normalização compartilhada — ver `citationGuard.normalizeForComparison`. */
 const { normalizeForComparison } = require('./textNormalize');
 
+/** `i.citation` → variável `i`, campo `citation`. Expressões ficam de fora. */
+const PREFIXED_KEY = /^([A-Za-z_]\w*)\.(\w+)$/;
+
+function isPlainObject(value) {
+    return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
+ * Um grupo de campos carrega trecho ou identidade de item?
+ *
+ * Uma linha de contagem (`{count: 20}`) não é evidência de nada — tratá-la como
+ * tal foi o que fez o botão de auditoria aparecer em turnos sem trecho algum.
+ */
+function isEvidence(fields) {
+    return Boolean(fields.citation || fields.Citation || fields.item_id || fields.itemId || fields.source_file || fields.sourceFile);
+}
+
+function toRecord(fields, source) {
+    return {
+        itemId: fields.item_id || fields.itemId || '',
+        citation: String(fields.citation || fields.Citation || ''),
+        bibtex: fields.bibtex || source.bibtex || '',
+        title: fields.title || source.title || '',
+        year: fields.year || source.year || '',
+        sourceFile: String(fields.source_file || fields.sourceFile || ''),
+        sourceLine: fields.source_line ?? fields.sourceLine ?? null
+    };
+}
+
+/**
+ * Os registros de evidência de UMA linha de resultado.
+ *
+ * **Por que não basta ler `row.citation`.** Cypher sem alias nomeia a coluna com
+ * a variável: `RETURN i.citation` devolve a chave `i.citation`, no ArcadeDB e no
+ * Neo4j. O próprio prompt ensinava essa forma, e a leitura pela chave exata
+ * perdia a evidência inteira — com ela, a verificação de citações, que não
+ * confere nada quando não há registro (correto para resposta sobre o template).
+ * Uma citação inventada passava sem aviso.
+ *
+ * **Agrupar pelo prefixo, não só removê-lo.** Uma linha de co-ocorrência
+ * (`RETURN i.citation, j.citation, s.bibtex`) traz dois trechos; colapsar para
+ * uma chave `citation` perderia um, e a citação perdida viraria falso "não
+ * confere". Cada variável com trecho vira um registro; campos de fonte
+ * (`bibtex`, `title`, `year`) de qualquer variável valem para todos.
+ * `RETURN i, s` (vértice inteiro) segue a mesma regra, com a coluna como grupo.
+ *
+ * **As chaves exatas têm precedência total:** prefixos e vértices só são lidos
+ * quando elas não trazem evidência — linha que já era lida continua saindo
+ * idêntica.
+ */
+function evidenceGroups(row) {
+    if (!isPlainObject(row)) {
+        return [];
+    }
+
+    const plain = {};
+    const groups = new Map();
+    const addTo = (name, field, value) => {
+        const group = groups.get(name) || {};
+        if (!(field in group)) {
+            group[field] = value;
+        }
+        groups.set(name, group);
+    };
+
+    for (const [key, value] of Object.entries(row)) {
+        const prefixed = PREFIXED_KEY.exec(key);
+        if (prefixed) {
+            addTo(prefixed[1], prefixed[2], value);
+        } else if (isPlainObject(value)) {
+            for (const [field, inner] of Object.entries(value)) {
+                addTo(key, field, inner);
+            }
+        } else {
+            plain[key] = value;
+        }
+    }
+
+    if (isEvidence(plain)) {
+        return [toRecord(plain, {})];
+    }
+
+    // Fonte da linha: o que as chaves exatas trazem vence, depois a ordem das colunas.
+    const source = { bibtex: plain.bibtex, title: plain.title, year: plain.year };
+    for (const group of groups.values()) {
+        for (const field of ['bibtex', 'title', 'year']) {
+            if (!source[field] && group[field]) {
+                source[field] = group[field];
+            }
+        }
+    }
+
+    return [...groups.values()].filter(isEvidence).map((group) => toRecord(group, source));
+}
+
 /**
  * Lê os registros de evidência de um payload de ferramenta.
  *
@@ -45,27 +140,7 @@ function parseEvidenceRecords(toolTexts) {
             continue;
         }
         for (const row of rows) {
-            if (!row || typeof row !== 'object') {
-                continue;
-            }
-            const citation = row.citation || row.Citation || '';
-            const sourceFile = row.source_file || row.sourceFile || '';
-            // Um registro só é evidência se traz trecho ou identidade de item.
-            // Uma linha de contagem (`{count: 20}`) não é evidência de nada —
-            // tratá-la como tal foi o que fez o botão de auditoria aparecer em
-            // turnos sem trecho algum.
-            if (!citation && !row.item_id && !sourceFile) {
-                continue;
-            }
-            records.push({
-                itemId: row.item_id || row.itemId || '',
-                citation: String(citation),
-                bibtex: row.bibtex || '',
-                title: row.title || '',
-                year: row.year || '',
-                sourceFile: String(sourceFile),
-                sourceLine: row.source_line ?? row.sourceLine ?? null
-            });
+            records.push(...evidenceGroups(row));
         }
     }
 
@@ -188,6 +263,7 @@ function findSupportingRecord(quote, records) {
 }
 
 module.exports = {
+    evidenceGroups,
     parseEvidenceRecords,
     groupEvidence,
     citationMatchesRecord,

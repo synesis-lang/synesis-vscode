@@ -31,6 +31,8 @@
  * pesquisador ainda tem na tela; o que sai por baixo já rolou para fora do
  * alcance prático do botão.
  */
+const { evidenceGroups } = require('./evidence');
+
 const MAX_TRACES = 12;
 
 /**
@@ -181,10 +183,10 @@ function parseRows(text) {
 
 /** A linha traz trecho anotado — isto é, evidência do corpus? */
 function rowHasEvidence(row) {
-    if (!row || typeof row !== 'object') {
-        return false;
-    }
-    return Boolean(row.citation || row.item_id || row.itemId);
+    // Mesma definição da trilha e da verificação de citações — com as chaves
+    // prefixadas de `RETURN i.citation` sem alias (ver `evidenceGroups`). Uma
+    // definição própria aqui foi o que fez o turno virar "template".
+    return evidenceGroups(row).length > 0;
 }
 
 /**

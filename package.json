@@ -2,7 +2,7 @@
   "name": "synesis",
   "displayName": "Synesis",
   "description": "Knowledge Engineering in VS Code: Official LSP client for Synesis.",
-  "version": "0.15.0",
+  "version": "0.15.2",
   "publisher": "synesis-lang",
   "author": "Christian Maciel De Britto",
   "license": "MIT",
@@ -572,6 +572,32 @@
             "minimum": 2048,
             "scope": "machine",
             "markdownDescription": "Janela de contexto (tokens) pedida ao Ollama em cada conversa — `num_ctx`. Vale o menor entre este valor e o máximo do modelo.\n\nO Ollama só aloca o que for pedido, e sem pedido usa um padrão pequeno que corta o prompt em silêncio. Valores maiores exigem mais memória de GPU; reduza se o servidor ficar sem VRAM."
+          },
+          "synesisExplorer.chat.ollama.think": {
+            "type": "string",
+            "enum": [
+              "default",
+              "off",
+              "low",
+              "medium",
+              "high"
+            ],
+            "enumDescriptions": [
+              "Não envia o parâmetro: vale o padrão do modelo.",
+              "Desliga o raciocínio (no gpt-oss, que não desliga, vira \"low\").",
+              "Raciocínio baixo — níveis valem no gpt-oss; nos demais, liga.",
+              "Raciocínio médio — níveis valem no gpt-oss; nos demais, liga.",
+              "Raciocínio alto — níveis valem no gpt-oss; nos demais, liga."
+            ],
+            "default": "low",
+            "scope": "machine",
+            "markdownDescription": "Raciocínio pedido aos modelos do Ollama que pensam — parâmetro `think`.\n\nNo chat o modelo pensa a cada consulta ao banco, inclusive nas que só escolhem a próxima: é o maior custo de tempo num modelo local. Modelos que não declaram raciocínio não recebem o parâmetro."
+          },
+          "synesisExplorer.chat.ollama.stream": {
+            "type": "boolean",
+            "default": true,
+            "scope": "machine",
+            "markdownDescription": "Receber a resposta do Ollama em pedaços (streaming), à medida que é gerada.\n\nNão encurta a geração. Evita que uma rodada longa estoure o prazo de 5 minutos do `fetch` do Node à espera dos cabeçalhos — o que acontece com modelo local lento sem streaming — e deixa o cancelamento agir no meio da geração. O chat ainda mostra o texto ao fim de cada rodada: ele o retém até saber que não é um passo intermediário antes de uma consulta ao banco."
           },
           "synesisExplorer.chat.arcadedb.uri": {
             "type": "string",

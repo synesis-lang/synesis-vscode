@@ -277,8 +277,9 @@ function buildAuditPrompt(question, answer, queries) {
         `Pergunta original: ${question}\n\n` +
         `Resposta dada:\n${answer}\n\n` +
         'Consulte o banco e devolva, para cada afirmação sobre o corpus que a resposta ' +
-        'fez, os trechos que a sustentam — com `i.citation`, `i.source_file`, ' +
-        '`i.source_line`, `i.item_id`, `s.bibtex`, `s.title` e `s.year`.\n\n' +
+        'fez, os trechos que a sustentam — com `i.citation AS citation`, ' +
+        '`i.source_file AS source_file`, `i.source_line AS source_line`, ' +
+        '`i.item_id AS item_id`, `s.bibtex AS bibtex`, `s.title AS title` e `s.year AS year`.\n\n' +
         'Se alguma afirmação da resposta anterior **não** tiver trecho que a sustente, ' +
         'diga isso explicitamente: é a informação mais importante desta auditoria.\n\n' +
         'Se a resposta usou busca semântica (proximidade vetorial), diga de qual ' +

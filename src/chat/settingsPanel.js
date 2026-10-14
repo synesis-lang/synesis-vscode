@@ -36,6 +36,8 @@ const {
     describeProfileGap
 } = require('./connectionProfiles');
 const { fetchOllamaModels, normalizeOllamaUrl, OLLAMA_DEFAULT_CONTEXT } = require('./modelCatalog');
+const { readOllamaRequestSettings } = require('./providerRegistry');
+const { OLLAMA_THINK_LEVELS } = require('./providers/ollamaModelProvider');
 
 const VIEW_TYPE = 'synesis.settings';
 
@@ -111,7 +113,8 @@ function readOllamaSettings() {
     const contextLength = Number(config.get('ollama.contextLength'));
     return {
         url: typeof url === 'string' ? url : '',
-        contextLength: Number.isFinite(contextLength) && contextLength > 0 ? contextLength : OLLAMA_DEFAULT_CONTEXT
+        contextLength: Number.isFinite(contextLength) && contextLength > 0 ? contextLength : OLLAMA_DEFAULT_CONTEXT,
+        ...readOllamaRequestSettings()
     };
 }
 
@@ -332,6 +335,12 @@ async function handleMessage(context, panel, message, onChanged) {
             // Global: settings de escopo `machine` não podem ir para o workspace.
             await config.update('ollama.url', url, vscode.ConfigurationTarget.Global);
             await config.update('ollama.contextLength', contextLength, vscode.ConfigurationTarget.Global);
+            if (OLLAMA_THINK_LEVELS.includes(message.think)) {
+                await config.update('ollama.think', message.think, vscode.ConfigurationTarget.Global);
+            }
+            if (typeof message.stream === 'boolean') {
+                await config.update('ollama.stream', message.stream, vscode.ConfigurationTarget.Global);
+            }
             return post({ toast: url ? `Ollama em ${url} salvo.` : 'Ollama desligado.' });
         }
 
@@ -535,6 +544,8 @@ function renderHtml(webview) {
     font-family: inherit; font-size: inherit;
   }
   input:focus, select:focus, textarea:focus { outline: 1px solid var(--vscode-focusBorder); }
+  label.check { display: flex; align-items: center; gap: 6px; }
+  label.check input { width: auto; margin: 0; }
   /* Lista de ids em monoespacada: um caractere trocado no id do modelo e o
      tipo de erro que so aparece na hora de usar. */
   textarea { resize: vertical; font-family: var(--vscode-editor-font-family, monospace); }
@@ -938,9 +949,38 @@ function renderHtml(webview) {
       'Pedida ao Ollama em cada conversa (num_ctx), limitada ao máximo do modelo. ' +
       'Sem ela o Ollama usa um padrão pequeno e corta o prompt em silêncio. Mais contexto exige mais VRAM.' }));
 
+    card.appendChild(el('label', { text: 'Raciocínio (think)', for: 'ol-think' }));
+    const think = el('select', { id: 'ol-think' });
+    [
+      ['default', 'Padrão do modelo (não envia)'],
+      ['off', 'Desligado'],
+      ['low', 'Baixo'],
+      ['medium', 'Médio'],
+      ['high', 'Alto']
+    ].forEach(([value, label]) => {
+      const opt = el('option', { value, text: label });
+      if (value === ollama.think) opt.selected = true;
+      think.appendChild(opt);
+    });
+    card.appendChild(think);
+    card.appendChild(el('p', { class: 'hint', text:
+      'O modelo pensa a cada consulta ao banco, inclusive nas que só escolhem a próxima — é o maior custo de tempo. ' +
+      'Níveis valem no gpt-oss (que não desliga: "Desligado" vira "Baixo"); nos demais, qualquer nível liga. ' +
+      'Modelos que não pensam ignoram esta opção.' }));
+
+    const stream = el('input', { id: 'ol-stream', type: 'checkbox' });
+    stream.checked = ollama.stream !== false;
+    card.appendChild(el('label', { class: 'check', for: 'ol-stream' }, [
+      stream, document.createTextNode('Receber a resposta em pedaços (streaming)')
+    ]));
+    card.appendChild(el('p', { class: 'hint', text:
+      'Evita que uma rodada longa de modelo local estoure o prazo de 5 minutos da conexão e permite cancelar no meio. ' +
+      'O texto ainda aparece ao fim de cada rodada.' }));
+
     card.appendChild(el('div', { class: 'actions' }, [
       el('button', { text: 'Salvar', onclick: () =>
-        vscode.postMessage({ type: 'saveOllama', url: url.value, contextLength: ctx.value }) }),
+        vscode.postMessage({ type: 'saveOllama', url: url.value, contextLength: ctx.value,
+          think: think.value, stream: stream.checked }) }),
       el('button', { class: 'secondary', text: 'Testar', onclick: () => {
         ollamaResult = { pending: true }; render();
         vscode.postMessage({ type: 'testOllama', url: url.value, contextLength: ctx.value });

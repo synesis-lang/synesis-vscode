@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.2] - 2026-09-28
+
+### Corrigido — a verificação de citações era desligada em silêncio
+
+Uma consulta Cypher sem alias devolve as colunas com o prefixo da variável:
+`RETURN i.citation` produz a chave `i.citation`, não `citation` — no ArcadeDB e
+no Neo4j. A extensão lia só a chave exata, e **o próprio prompt ensinava a forma
+sem alias**. Observado ao vivo (`gpt-oss:20b`, banco `face85`): a consulta
+devolveu 5 linhas com trechos, a resposta exibiu 3 citações, e:
+
+- a trilha declarou *"Não há trechos do corpus a auditar"*;
+- as âncoras até o `.syn` não apareceram;
+- **a verificação de citações não conferiu nada** — sem registro de evidência
+  ela não verifica, por desenho (correto para resposta sobre o template). Uma
+  citação inventada teria passado sem aviso. A ausência de aviso naquele turno
+  não foi aprovação.
+
+A correção (`evidence.evidenceGroups`) lê a evidência agrupando as chaves pela
+variável: `i.citation`/`i.source_file` formam um registro, `j.citation` outro, e
+os campos de fonte (`s.bibtex`, `s.title`, `s.year`) valem para todos. O vértice
+inteiro (`RETURN i, s`) segue a mesma regra. **As chaves exatas têm precedência
+total:** o prefixo só é lido quando elas não trazem evidência, então toda linha
+que já era lida sai idêntica. Expressões sem alias (`toLower(i.citation)`)
+continuam fora de alcance.
+
+A trilha, a classificação do turno (`rowHasEvidence`) e a verificação de
+citações passam a usar essa mesma definição de evidência — antes eram duas. E o
+prompt passa a pedir alias (`i.citation AS citation`…), como segunda camada.
+
+## [0.15.1] - 2026-09-28
+
+### Adicionado — raciocínio e streaming configuráveis no Ollama
+
+Duas opções novas no card **Ollama (modelos locais)** da página de
+configuração, também em `settings.json` (escopo `machine`):
+
+- **`synesisExplorer.chat.ollama.think`** (`default` · `off` · `low` · `medium`
+  · `high`; padrão `low`). No chat o modelo pensa a cada consulta ao banco,
+  inclusive nas que só escolhem a próxima — o maior custo de tempo num modelo
+  local. O parâmetro não é uniforme: o **gpt-oss** recebe o nível e não desliga
+  (`off` vira `low`); os demais só ligam ou desligam. Modelo que não declara
+  `thinking` em `capabilities` não recebe o parâmetro, nem `false`.
+- **`synesisExplorer.chat.ollama.stream`** (padrão ligado). A resposta chega em
+  pedaços (NDJSON). Não encurta a geração, mas evita que uma rodada lenta
+  estoure o prazo de 5 minutos do `fetch` à espera dos cabeçalhos e deixa o
+  cancelamento agir no meio. **O texto continua aparecendo ao fim de cada
+  rodada:** o laço do chat o retém de propósito até saber que não é um passo
+  intermediário antes de uma consulta ao banco.
+
 ## [0.15.0] - 2026-09-28
 
 ### Adicionado — modelos locais do Ollama no chat

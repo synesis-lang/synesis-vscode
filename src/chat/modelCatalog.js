@@ -292,6 +292,9 @@ function ollamaContextLength(show) {
  *
  * Modelos só de embedding (`capabilities` sem `completion`) não conversam e
  * ficam fora do seletor.
+ *
+ * `thinking` diz se o modelo aceita o parâmetro `think` (ver
+ * `resolveOllamaThink` no provider).
  */
 async function fetchOllamaModels(
     baseUrl,
@@ -344,7 +347,10 @@ async function fetchOllamaModels(
                 ...splitContext(contextWindow),
                 // Ausência de `capabilities` é ausência de informação (servidor
                 // antigo), não de suporte — mesmo critério do OpenRouter.
-                toolCalling: Array.isArray(caps) ? caps.includes('tools') : true
+                toolCalling: Array.isArray(caps) ? caps.includes('tools') : true,
+                // Aqui o critério é o inverso: `think` num modelo que não pensa
+                // pode ser recusado, então sem informação o parâmetro não vai.
+                thinking: Array.isArray(caps) && caps.includes('thinking')
             };
         });
 }

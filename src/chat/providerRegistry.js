@@ -11,7 +11,7 @@ const vscode = require('vscode');
 const { AnthropicModelProvider } = require('./providers/anthropicModelProvider');
 const { OpenAiCompatibleModelProvider } = require('./providers/openAiCompatibleModelProvider');
 const { GeminiModelProvider } = require('./providers/geminiModelProvider');
-const { OllamaModelProvider } = require('./providers/ollamaModelProvider');
+const { OllamaModelProvider, OLLAMA_THINK_LEVELS } = require('./providers/ollamaModelProvider');
 const {
     CatalogCache,
     fetchAnthropicModels,
@@ -109,6 +109,21 @@ function readOpenRouterModelIds() {
 function readOllamaUrl() {
     const value = vscode.workspace.getConfiguration('synesisExplorer.chat').get('ollama.url');
     return typeof value === 'string' ? value.trim() : '';
+}
+
+/**
+ * Raciocínio e streaming pedidos ao Ollama. Lidos a cada pedido, então mudar na
+ * página de configuração vale na próxima pergunta. Valor inválido cai no padrão
+ * declarado no package.json.
+ */
+function readOllamaRequestSettings() {
+    const config = vscode.workspace.getConfiguration('synesisExplorer.chat');
+    const think = config.get('ollama.think');
+    const stream = config.get('ollama.stream');
+    return {
+        think: OLLAMA_THINK_LEVELS.includes(think) ? think : 'low',
+        stream: typeof stream === 'boolean' ? stream : true
+    };
 }
 
 /** Janela de contexto a pedir ao Ollama (ver `fetchOllamaModels`). */
@@ -212,7 +227,11 @@ function buildOllamaDiscovery() {
 
 function buildProvider(context, providerId) {
     if (providerId === 'ollama') {
-        return new OllamaModelProvider({ getBaseUrl: readOllamaUrl, discoverModels: buildOllamaDiscovery() });
+        return new OllamaModelProvider({
+            getBaseUrl: readOllamaUrl,
+            discoverModels: buildOllamaDiscovery(),
+            getRequestSettings: readOllamaRequestSettings
+        });
     }
     const getApiKey = getApiKeyGetter(context, providerId);
     const discoverModels = buildDiscovery(providerId, getApiKey);
@@ -300,6 +319,7 @@ function registerAllProviders(context) {
 
 module.exports = {
     buildOllamaDiscovery,
+    readOllamaRequestSettings,
     registerAllProviders,
     PROVIDERS,
     SECRET_KEYS
