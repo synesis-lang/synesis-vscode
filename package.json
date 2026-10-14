@@ -2,7 +2,7 @@
   "name": "synesis",
   "displayName": "Synesis",
   "description": "Knowledge Engineering in VS Code: Official LSP client for Synesis.",
-  "version": "0.15.2",
+  "version": "0.16.0",
   "publisher": "synesis-lang",
   "author": "Christian Maciel De Britto",
   "license": "MIT",
@@ -649,6 +649,11 @@
             "type": "boolean",
             "default": true,
             "description": "Enable inline diagnostics (error/warning squiggles) from the Synesis LSP."
+          },
+          "synesisExplorer.diagnostics.checkCodes": {
+            "type": "boolean",
+            "default": false,
+            "markdownDescription": "Warn on every code missing from the ontology, with a suggested concept (same as `synesis compile --check-codes`). Off by default: before the ontology is built every in vivo code is missing, so the project shows a single summary warning on the `.synp` instead."
           },
           "synesisExplorer.inlayHints.enabled": {
             "type": "boolean",

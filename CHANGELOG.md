@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-10-14
+
+A configuração só tem efeito com `synesis-lsp>=0.24.0` (e `synesis>=0.13.4`). Um
+LSP anterior a ignora sem erro, por isso `MIN_LSP_VERSION` continua em `0.13.0`.
+
+### Adicionado — `synesisExplorer.diagnostics.checkCodes`
+
+- Nova configuração, **desligada por padrão**: avisar cada código ausente da
+  ontologia, com o conceito sugerido. Equivale a `synesis compile --check-codes`.
+  Desligada, o projeto mostra um único aviso de resumo no `.synp`, porque antes
+  de gerar a ontologia todo código in vivo estaria ausente. No face85 o painel
+  de problemas tinha 66 mil avisos.
+- O cliente sincroniza com o servidor só a seção `synesisExplorer.diagnostics`
+  (`configurationSection`), não a configuração inteira, que inclui a do chat.
+  Mudar a opção recompila o projeto no servidor; não é preciso recarregar a
+  janela.
+
 ## [0.15.2] - 2026-09-28
 
 ### Corrigido — a verificação de citações era desligada em silêncio

@@ -48,7 +48,10 @@ class SynesisLspClient {
                 { scheme: 'file', language: 'synesis' }
             ],
             synchronize: {
-                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{syn,synt,synp,syno,bib}')
+                fileEvents: vscode.workspace.createFileSystemWatcher('**/*.{syn,synt,synp,syno,bib}'),
+                // Só a seção de diagnósticos vai ao servidor (checkCodes): a seção
+                // inteira levaria junto as configurações do chat.
+                configurationSection: 'synesisExplorer.diagnostics'
             },
             outputChannel: this.outputChannel,
             middleware: this._buildMiddleware()
