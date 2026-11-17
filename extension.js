@@ -675,6 +675,35 @@ function activate(context) {
         })
     );
 
+    // Evidencias da subarvore: ITEMs do conceito e de todos os descendentes,
+    // sem repetir um ITEM que cita dois deles (Spec ROLE/EXPORT §12, A2d).
+    context.subscriptions.push(
+        vscode.commands.registerCommand('synesis.ontology.subtreeEvidence', async (treeItem) => {
+            const concept = treeItem && (treeItem.concept || treeItem.label);
+            if (!concept || !dataService) {
+                return;
+            }
+            const root = resolveWorkspaceRoot(vscode.window.activeTextEditor && vscode.window.activeTextEditor.document);
+            const items = await dataService.getSubtreeEvidence(root, concept);
+            if (!items || items.length === 0) {
+                vscode.window.showInformationMessage(`No ITEM in the subtree of "${concept}".`);
+                return;
+            }
+            const picked = await vscode.window.showQuickPick(
+                items.map(item => ({
+                    label: `${item.bibref} · ${item.concept}`,
+                    description: `Ln ${item.line + 1}`,
+                    detail: item.quote || '',
+                    item
+                })),
+                { placeHolder: `${items.length} ITEM(s) na subarvore de ${concept}`, matchOnDetail: true }
+            );
+            if (picked) {
+                openLocation(vscode.Uri.parse(picked.item.uri).fsPath, picked.item.line, 0);
+            }
+        })
+    );
+
     context.subscriptions.push(
         vscode.commands.registerCommand('synesis.code.goToDefinition', async (treeItem) => {
             // Fallback: keybinding (F12) não passa treeItem, usar seleção do tree view
@@ -821,7 +850,7 @@ function activate(context) {
             )
         );
     } catch (error) {
-        console.error('Synesis Chat: falha ao registrar chat provider/participant', error);
+        console.error('Synesis Chat: failed to register chat provider/participant', error);
     }
 }
 
@@ -1140,7 +1169,7 @@ function setLspStatus(state, stats, lspVersion, compilerVersion) {
     }
 
     if (state === 'incompatible') {
-        lspStatusItem.text = `$(alert) LSP Incompatível (${commandLabel})`;
+        lspStatusItem.text = `$(alert) LSP Incompatible (${commandLabel})`;
         updateExplorerTitles('incompatible');
         return;
     }

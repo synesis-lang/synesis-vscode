@@ -216,19 +216,19 @@ function describeUnverified(unverified) {
 
     const plural = unverified.length > 1;
     return (
-        `\n\n---\n\n⚠️ **${plural ? 'Citações não conferidas' : 'Citação não conferida'}.** ` +
-        `${plural ? 'Os trechos abaixo não foram encontrados' : 'O trecho abaixo não foi encontrado'} ` +
-        'em nenhum registro que o banco devolveu nesta conversa:\n\n' +
+        `\n\n---\n\n⚠️ **${plural ? 'Unchecked quotations' : 'Unchecked quotation'}.** ` +
+        `${plural ? 'The excerpts below were not found' : 'The excerpt below was not found'} ` +
+        'in any record the database returned in this conversation:\n\n' +
         `${list}\n\n` +
-        'Pode ser recorte ou reformatação — mas trate como **não verificado** até conferir ' +
-        'no arquivo `.syn`.\n\n' +
+        'It may be a cut or a reformatting — but treat it as **unverified** until you check it ' +
+        'in the `.syn` file.\n\n' +
         // A frase "as demais afirmações não são afetadas" saiu na Etapa 3: não
         // era inferível. A citação que não confere pode sustentar exatamente a
         // conclusão principal da resposta — e dizer o contrário dava ao
         // pesquisador uma garantia que a verificação não produz.
-        'Esta verificação confere **literalidade**: se o trecho existe no registro. Ela não ' +
-        'diz se a citação sustenta a afirmação que a acompanha, nem se as demais afirmações ' +
-        'têm lastro.'
+        'This check verifies **literalness**: whether the excerpt exists in the record. It does not ' +
+        'say whether the quotation supports the claim next to it, nor whether the other claims ' +
+        'are grounded.'
     );
 }
 

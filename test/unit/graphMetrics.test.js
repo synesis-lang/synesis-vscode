@@ -11,6 +11,7 @@
  */
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const { describeGraphMetrics } = require('../../src/chat/chatParticipant');
 
 const COM_METRICAS = [
@@ -27,6 +28,9 @@ const COM_METRICAS = [
 ];
 
 describe('Métricas de rede — detecção', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('não instrui quando o grafo não tem métricas', () => {
         // Grafo gerado por versão anterior, ou backend que não as calcula.
         // Mandar usar `pagerank` onde ele não existe gastaria rodadas com erro.
@@ -57,7 +61,10 @@ describe('Métricas de rede — detecção', () => {
 });
 
 describe('Métricas de rede — o que é ensinado', () => {
-    const text = describeGraphMetrics(COM_METRICAS);
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
+    const text = withPromptLanguage('pt', () => describeGraphMetrics(COM_METRICAS));
 
     it('trata "mais central" como escolha de método, não como fato', () => {
         // CORREÇÃO (Etapa 2): o texto dizia que PageRank é "a resposta certa
@@ -128,6 +135,9 @@ describe('Métricas de rede — o que é ensinado', () => {
  * chat, então o pesquisador lia um ranking sem saber o que ele inclui.
  */
 describe('Métricas de rede — escopo declarado', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     const COM_PAGERANK = [{ name: 'Chain', properties: [{ name: 'pagerank' }] }];
 
     it('usa o escopo que o ProjectContext declara', () => {

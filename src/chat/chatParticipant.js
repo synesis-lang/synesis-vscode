@@ -9,10 +9,13 @@
  * no protótipo.
  */
 
+const path = require('path');
 const vscode = require('vscode');
 const { buildSystemPromptWithDatabase, getSelectedDatabase } = require('./databaseSelection');
 const { verifyCitations, describeUnverified } = require('./citationGuard');
 const { renderLexicalCapability } = require('./lexicalCapability');
+const { pick, resolvePromptLanguage, setPromptLanguage, withPromptLanguage } = require('./promptLanguage');
+const { SYSTEM_PROMPT_PT } = require('./promptTextPt');
 const {
     classifyIdentity,
     collectObserved,
@@ -219,7 +222,7 @@ async function ensureMcpServersStarted() {
         // Comando pode não existir em versões mais antigas do VSCode, ou não
         // haver servidor MCP configurado — não é fatal, só significa que
         // vscode.lm.tools pode vir vazio de fontes MCP.
-        console.warn('Synesis Chat: falha ao iniciar servidores MCP', error);
+        console.warn('Synesis Chat: failed to start MCP servers', error);
     }
 }
 
@@ -429,13 +432,13 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
             const modelQueried = (trace ? trace.toolCalls : []).some((call) => !call.prefetch);
             if (!modelQueried) {
                 stream.markdown(
-                    '\n\n---\n\n⚠️ **Esta resposta não consultou o banco.** ' +
-                        'Nenhuma ferramenta foi chamada neste turno, então o que está acima ' +
-                        'vem do que o modelo já trazia — não do seu corpus. Trate como ' +
-                        'hipótese, não como resultado.\n\n' +
-                        'Se a pergunta era sobre os dados, refaça-a de forma mais concreta ' +
-                        '(citando o conceito ou o campo de interesse); se o modelo ignora as ' +
-                        'ferramentas de forma consistente, ele não serve para esta tarefa.'
+                    '\n\n---\n\n⚠️ **This answer did not query the database.** ' +
+                        'No tool was called in this turn, so what is above ' +
+                        'comes from what the model already knew — not from your corpus. Treat it as a ' +
+                        'hypothesis, not a result.\n\n' +
+                        'If the question was about the data, ask it again more concretely ' +
+                        '(naming the concept or field of interest); if the model consistently ignores the ' +
+                        'tools, it is not suited to this task.'
                 );
             }
 
@@ -466,7 +469,7 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
 
         const toolResultParts = [];
         for (const call of toolCalls) {
-            stream.progress(`Consultando ferramenta \`${call.name}\`...`);
+            stream.progress(`Calling tool \`${call.name}\`...`);
             const startedAt = new Date().toISOString();
             try {
                 const result = await invokeAnyTool(
@@ -501,7 +504,9 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
                 const message = error.message || String(error);
                 toolResultParts.push(
                     new vscode.LanguageModelToolResultPart(call.callId, [
-                        new vscode.LanguageModelTextPart(`Erro ao chamar a ferramenta: ${message}`)
+                        new vscode.LanguageModelTextPart(
+                            `${pick({ en: 'Error calling the tool', pt: 'Erro ao chamar a ferramenta' })}: ${message}`
+                        )
                     ])
                 );
                 // A falha entra na trilha: um relatório que mostra só o que deu
@@ -532,10 +537,10 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
     // primeiro e o raciocínio depois, explicitamente rotulado — em vez de o
     // pesquisador ler prosa exploratória e só no fim descobrir o que era.
     stream.markdown(
-        `\n\n---\n\n⚠️ **Resposta incompleta.** Parei após ${maxRounds} consultas ao banco ` +
-            'sem chegar a uma conclusão.\n\n' +
-            'Tente uma pergunta mais específica (por exemplo, citando o conceito exato de interesse), ' +
-            'ou pergunte antes pela estrutura: *"como Chain se conecta a Source?"*'
+        `\n\n---\n\n⚠️ **Incomplete answer.** I stopped after ${maxRounds} database queries ` +
+            'without reaching a conclusion.\n\n' +
+            'Try a more specific question (for example, naming the exact concept of interest), ' +
+            'or ask about the structure first: *"how does Chain connect to Source?"*'
     );
 
     const reasoning = ((trace && trace.intermediateText) || [])
@@ -543,7 +548,7 @@ async function runToolCallingLoop(model, initialMessages, tools, stream, token, 
         .filter(Boolean)
         .join('\n\n');
     if (reasoning) {
-        stream.markdown(`\n\n---\n\n**Raciocínio intermediário** (não é a resposta):\n\n${reasoning}`);
+        stream.markdown(`\n\n---\n\n**Intermediate reasoning** (not the answer):\n\n${reasoning}`);
     }
 
     // Teto estourado não é resposta: não vale oferecer trilha de evidência de um
@@ -955,17 +960,16 @@ function describeAccessFailure(text, database) {
     }
     if (/not authorized/i.test(text)) {
         return (
-            `A credencial configurada não tem acesso ao banco **${database}**.\n\n` +
-            'O servidor MCP do ArcadeDB é o mesmo para todos os bancos; quem limita o ' +
-            'alcance é o usuário. Informe um com permissão neste banco em ' +
-            '**Synesis: Configurar Conexão do Banco**, e depois regrave a conexão com ' +
-            '**Synesis: Conectar ao ArcadeDB (MCP)**.'
+            `The configured credential has no access to the database **${database}**.\n\n` +
+            'The ArcadeDB MCP server is the same for every database; the user is what ' +
+            'limits its reach. Set a user with permission on this database in ' +
+            '**Synesis: Settings** (graph database connections).'
         );
     }
     if (/does not exist/i.test(text)) {
         return (
-            `O banco **${database}** não existe neste servidor.\n\n` +
-            'Use **Synesis: Selecionar Banco do Chat** para escolher um dos disponíveis.'
+            `The database **${database}** does not exist on this server.\n\n` +
+            'Use **Synesis: Select Chat Graph Database** to choose one of the available ones.'
         );
     }
     return undefined;
@@ -1057,7 +1061,7 @@ async function readProjectContext(tools, database, token, { full = false, trace,
             status: 'error',
             error: error.message || String(error)
         });
-        console.warn('Synesis Chat: sem ProjectContext neste banco', error);
+        console.warn('Synesis Chat: no ProjectContext in this database', error);
         return undefined;
     }
 }
@@ -1087,14 +1091,33 @@ const METRIC_HINTS = {
     // método dele. Pior no ArcadeDB, onde `algo.*` roda sobre o grafo INTEIRO
     // (conceitos, Items, Sources e taxonomias), enquanto o GDS do Neo4j projeta
     // só o subgrafo de conceitos: os escores não são comparáveis entre backends.
-    pagerank: 'prestígio recursivo — pesa a importância dos vizinhos, não só quantos são',
-    betweenness: 'ponte: quanto o conceito liga partes distantes da rede',
-    community: 'agrupamento detectado por Louvain; o número é rótulo interno desta execução, não categoria estável',
-    degree: 'conectividade direta — número de vizinhos (bruto, não ponderado)',
-    in_degree: 'conectividade de entrada',
-    out_degree: 'conectividade de saída',
-    mention_count: 'presença no corpus: em quantos trechos o conceito é mencionado',
-    source_count: 'presença no corpus: em quantas referências bibliográficas aparece'
+    // Texto de prompt: segue o idioma do projeto (`pick`, em describeGraphMetrics).
+    pagerank: {
+        en: 'recursive prestige — weighs how important the neighbours are, not only how many',
+        pt: 'prestígio recursivo — pesa a importância dos vizinhos, não só quantos são'
+    },
+    betweenness: {
+        en: 'bridge: how much the concept links distant parts of the network',
+        pt: 'ponte: quanto o conceito liga partes distantes da rede'
+    },
+    community: {
+        en: 'grouping detected by Louvain; the number is an internal label of this run, not a stable category',
+        pt: 'agrupamento detectado por Louvain; o número é rótulo interno desta execução, não categoria estável'
+    },
+    degree: {
+        en: 'direct connectivity — number of neighbours (raw, unweighted)',
+        pt: 'conectividade direta — número de vizinhos (bruto, não ponderado)'
+    },
+    in_degree: { en: 'incoming connectivity', pt: 'conectividade de entrada' },
+    out_degree: { en: 'outgoing connectivity', pt: 'conectividade de saída' },
+    mention_count: {
+        en: 'presence in the corpus: in how many excerpts the concept is mentioned',
+        pt: 'presença no corpus: em quantos trechos o conceito é mencionado'
+    },
+    source_count: {
+        en: 'presence in the corpus: in how many bibliographic references it appears',
+        pt: 'presença no corpus: em quantas referências bibliográficas aparece'
+    }
 };
 
 /** Quais métricas este grafo realmente tem, pelo schema. */
@@ -1127,13 +1150,33 @@ function describeGraphMetrics(vertices, scope) {
     }
 
     const label = [...found.values()][0].label;
-    const lines = [...found.entries()].map(([name, { hint }]) => `- \`${name}\` — ${hint}`);
+    const lines = [...found.entries()].map(([name, { hint }]) => `- \`${name}\` — ${pick(hint)}`);
 
     // A consulta de exemplo usa uma métrica que este grafo TEM. Ensinar
     // `pagerank` num grafo que só calculou `degree` gastaria uma rodada com erro
     // — a mesma disciplina condicional do resto do prompt.
     const example = found.has('pagerank') ? 'pagerank' : [...found.keys()][0];
 
+    const names = [...found.keys()].map((name) => `\`${name}\``).join(', ');
+    const query = `MATCH (c:${label}) RETURN c.name, c.${example} ORDER BY c.${example} DESC LIMIT 10`;
+    if (pick({ en: 'en', pt: 'pt' }) === 'en') {
+        return (
+            'Network metrics already computed in this graph (do not recompute):\n' +
+            `${lines.join('\n')}\n` +
+            `Example: \`${query}\` — **do not count edges by hand**, the result differs and costs ` +
+            'several queries.\n' +
+            '**"Most central" has no single answer.** Choose the metric by the meaning of the ' +
+            `question — ${names} measure ` +
+            'different things — and **say which metric you used and why**. If the question does not ' +
+            'make the meaning clear, ask, or answer with more than one.\n' +
+            (scope
+                ? `These metrics were computed by the \`${scope.backend}\` backend, scope ` +
+                  `\`${scope.scope}\`. Say so when presenting a ranking.`
+                : 'These metrics were computed over the whole graph (concepts, excerpts, ' +
+                  'references and taxonomies), not only over the concept network. Say so when ' +
+                  'presenting a ranking.')
+        );
+    }
     return (
         'Métricas de rede já calculadas neste grafo (não recalcule):\n' +
         `${lines.join('\n')}\n` +
@@ -1195,6 +1238,31 @@ function renderSemanticCapability(context) {
         .filter(Boolean)
         .join(', ');
 
+    if (pick({ en: 'en', pt: 'pt' }) === 'en') {
+        return (
+            'Semantic search available in this database:\n' +
+            `- Concepts (\`${label}\`) have a vector index built from: ${list}.\n` +
+            '- Use it to find concepts **related by meaning** when the search ' +
+            'by name fails or comes back thin. It does not replace exact search: try `CONTAINS` first.\n' +
+            '- The query is SQL (`language: "sql"`), not Cypher, and starts from a concept that already ' +
+            'exists in the graph — no vector needs to be generated:\n' +
+            '```sql\n' +
+            'SELECT record.name AS concept, distance AS dist FROM (\n' +
+            `  SELECT expand(vectorNeighbors('${label}[embedding]', $v, 8))\n` +
+            `  LET $v = (SELECT embedding FROM ${label} WHERE name = 'concept_name')[0].embedding)\n` +
+            '```\n' +
+            '- Smaller `distance` = closer. The concept itself comes back with distance ~0.\n' +
+            '- **Never** request the `embedding` property in an answer: it is hundreds of numbers ' +
+            'of no use to the researcher.\n\n' +
+            'When you use semantic search, **say that the result is by proximity**, not by mention. ' +
+            'They are different things:\n' +
+            '- "these concepts mention X" — a claim about the corpus, verifiable in the excerpt;\n' +
+            '- "these concepts are semantically close to X" — an inference of the embedding ' +
+            'model, which is a **reading suggestion**, not something the researcher stated.\n' +
+            'Mark the difference in the answer. A close concept the researcher never linked to X ' +
+            'is still a useful finding — as long as it is presented as such.'
+        );
+    }
     return (
         'Busca semântica disponível neste banco:\n' +
         `- Conceitos (\`${label}\`) têm índice vetorial construído a partir de: ${list}.\n` +
@@ -1232,15 +1300,19 @@ function renderProjectContext(context) {
     }
     const parts = [];
     if (context.description) {
-        parts.push(`Sobre este projeto de pesquisa:\n${context.description}`);
+        parts.push(`${pick({ en: 'About this research project', pt: 'Sobre este projeto de pesquisa' })}:\n${context.description}`);
     }
     if (context.summary) {
         parts.push(context.summary);
     }
     if (context.templateDoc) {
         parts.push(
-            'Semântica do template deste projeto — use estes campos, escalas e ' +
-                `arestas, não os de um exemplo:\n${context.templateDoc}`
+            pick({
+                en: "This project's template semantics — use these fields, scales and " +
+                    'edges, not those of an example',
+                pt: 'Semântica do template deste projeto — use estes campos, escalas e ' +
+                    'arestas, não os de um exemplo'
+            }) + `:\n${context.templateDoc}`
         );
     }
     const lexical = renderLexicalCapability(context);
@@ -1278,10 +1350,12 @@ function describeStaleness(generatedAt) {
     if (days < 90) {
         return undefined;
     }
-    return (
-        `Atenção: este grafo foi gerado há cerca de ${days} dias. Se o projeto mudou ` +
-        'desde então, avise que a resposta reflete um snapshot, não o estado atual.'
-    );
+    return pick({
+        en: `Note: this graph was generated about ${days} days ago. If the project changed ` +
+            'since then, warn that the answer reflects a snapshot, not the current state.',
+        pt: `Atenção: este grafo foi gerado há cerca de ${days} dias. Se o projeto mudou ` +
+            'desde então, avise que a resposta reflete um snapshot, não o estado atual.'
+    });
 }
 
 async function describeProjectSchema(tools, database, token, trace, metricsScope, client) {
@@ -1325,7 +1399,7 @@ async function describeProjectSchema(tools, database, token, trace, metricsScope
             // defeito que a Etapa D corrige. A instrução de como consultar vem de
             // `renderSemanticCapability`, a partir do `ProjectContext`.
             const props = names.filter((name) => name !== 'embedding');
-            const vector = names.includes('embedding') ? ' + índice vetorial' : '';
+            const vector = names.includes('embedding') ? pick({ en: ' + vector index', pt: ' + índice vetorial' }) : '';
             return `  - \`${t.name}\`${props.length ? ` (${props.join(', ')})` : ''}${vector}`;
         });
 
@@ -1341,9 +1415,14 @@ async function describeProjectSchema(tools, database, token, trace, metricsScope
         // saírem do banco em vez de um vocabulário fixo (Etapa 2).
         return {
             text:
-                `Schema real do banco "${database}" — use estes nomes, não os do exemplo acima:\n` +
-                `Vértices:\n${vertexLines.join('\n')}\n` +
-                `Arestas: ${edges.map((t) => `\`${t.name}\``).join(', ')}` +
+                pick({
+                    en: `Actual schema of the database "${database}" — use these names, not those of the example above:\n` +
+                        `Vertices:\n${vertexLines.join('\n')}\n` +
+                        `Edges: ${edges.map((t) => `\`${t.name}\``).join(', ')}`,
+                    pt: `Schema real do banco "${database}" — use estes nomes, não os do exemplo acima:\n` +
+                        `Vértices:\n${vertexLines.join('\n')}\n` +
+                        `Arestas: ${edges.map((t) => `\`${t.name}\``).join(', ')}`
+                }) +
                 (metrics ? `\n\n${metrics}` : ''),
             vertices,
             edges,
@@ -1351,7 +1430,7 @@ async function describeProjectSchema(tools, database, token, trace, metricsScope
             metricNames: availableMetrics(vertices)
         };
     } catch (error) {
-        console.warn('Synesis Chat: falha ao ler o schema do banco', error);
+        console.warn('Synesis Chat: failed to read the database schema', error);
         return undefined;
     }
 }
@@ -1757,23 +1836,35 @@ async function readTopTaxonomy(tools, database, conceptLabel, schema, token, lim
  * então não serve para sugerir perguntas.
  */
 function buildSuggestedQuestions(context, taxonomy = {}, metricNames = []) {
-    const label = (context && context.conceptLabel) || 'conceito';
+    // As sugestões viram a PERGUNTA enviada ao modelo quando clicadas: seguem o
+    // idioma do projeto, como os prompts (ver promptLanguage.js).
+    const label = (context && context.conceptLabel) || pick({ en: 'concept', pt: 'conceito' });
     const values = taxonomy.values || [];
-    // O rótulo real do template, em minúscula, para a pergunta soar natural:
-    // "do tópico X" num projeto com `Topic`, "da dimensão X" num com `Dimension`.
-    const taxonomyWord = taxonomy.label ? String(taxonomy.label).toLowerCase() : 'grupo';
+    const taxonomyWord = taxonomy.label ? String(taxonomy.label).toLowerCase() : pick({ en: 'group', pt: 'grupo' });
     const suggestions = [];
 
     if (values.length) {
-        suggestions.push({
-            prompt: `Liste os conceitos do ${taxonomyWord} ${values[0]} e diga em que artigos aparecem`,
-            label: `Conceitos de ${values[0]}, com as fontes`
-        });
+        suggestions.push(pick({
+            en: {
+                prompt: `List the concepts of the ${taxonomyWord} ${values[0]} and say in which articles they appear`,
+                label: `Concepts of ${values[0]}, with sources`
+            },
+            pt: {
+                prompt: `Liste os conceitos do ${taxonomyWord} ${values[0]} e diga em que artigos aparecem`,
+                label: `Conceitos de ${values[0]}, com as fontes`
+            }
+        }));
     }
-    suggestions.push({
-        prompt: 'Que campos o template deste projeto define, e o que cada um significa?',
-        label: 'Entender o template do projeto'
-    });
+    suggestions.push(pick({
+        en: {
+            prompt: "Which fields does this project's template define, and what does each one mean?",
+            label: "Understand the project's template"
+        },
+        pt: {
+            prompt: 'Que campos o template deste projeto define, e o que cada um significa?',
+            label: 'Entender o template do projeto'
+        }
+    }));
 
     // Condicional (Etapa 2): sugerir PageRank num grafo que não o calculou —
     // Neo4j, ou export sem métricas — entrega ao pesquisador uma pergunta que
@@ -1782,17 +1873,28 @@ function buildSuggestedQuestions(context, taxonomy = {}, metricNames = []) {
         (metricNames || []).includes(name)
     );
     if (centrality) {
-        suggestions.push({
-            prompt:
-                `Quais são os 10 ${label} mais centrais na rede por \`${centrality}\`? ` +
-                'Diga o que essa métrica mede.',
-            label: 'Conceitos mais centrais'
-        });
+        suggestions.push(pick({
+            en: {
+                prompt:
+                    `Which are the 10 most central ${label} in the network by \`${centrality}\`? ` +
+                    'Say what this metric measures.',
+                label: 'Most central concepts'
+            },
+            pt: {
+                prompt:
+                    `Quais são os 10 ${label} mais centrais na rede por \`${centrality}\`? ` +
+                    'Diga o que essa métrica mede.',
+                label: 'Conceitos mais centrais'
+            }
+        }));
     }
 
     if (values.length > 1) {
         suggestions.push({
-            prompt: `Como os conceitos de ${values[0]} se relacionam com os de ${values[1]}?`,
+            prompt: pick({
+                en: `How do the concepts of ${values[0]} relate to those of ${values[1]}?`,
+                pt: `Como os conceitos de ${values[0]} se relacionam com os de ${values[1]}?`
+            }),
             label: `${values[0]} × ${values[1]}`
         });
     }
@@ -1825,12 +1927,12 @@ async function renderWelcome(stream, tools, database, token, client, cache, cach
     const resolve = (slot, produce) => (cache ? cache.resolve(scope, slot, produce) : produce());
     if (!database) {
         stream.markdown(
-            'Ainda não há um banco selecionado.\n\n' +
-                'Escolha um pelo comando **Synesis: Selecionar Banco do Chat**, ou pelo ' +
-                'indicador na barra de status. Se o ArcadeDB ainda não estiver conectado, ' +
-                'use **Synesis: Conectar ao ArcadeDB (MCP)**.'
+            'No database is selected yet.\n\n' +
+                'Choose one with **Synesis: Select Chat Graph Database**, or with the ' +
+                'status bar indicator. If no graph connection is configured yet, ' +
+                'use **Synesis: Settings**.'
         );
-        stream.button({ command: 'synesis.chat.selectDatabase', title: 'Selecionar banco' });
+        stream.button({ command: 'synesis.chat.selectDatabase', title: 'Select database' });
         return [];
     }
 
@@ -1841,21 +1943,21 @@ async function renderWelcome(stream, tools, database, token, client, cache, cach
     // Recusa de acesso: dizer a causa real. Tratar como "grafo sem contexto"
     // mandaria re-exportar o projeto, o que não resolve permissão.
     if (context && context.accessFailure) {
-        stream.markdown(`Não consegui consultar o banco **${database}**.\n\n${context.accessFailure}`);
-        stream.button({ command: 'synesis.chat.selectDatabase', title: 'Selecionar outro banco' });
+        stream.markdown(`I could not query the database **${database}**.\n\n${context.accessFailure}`);
+        stream.button({ command: 'synesis.chat.selectDatabase', title: 'Select another database' });
         return [];
     }
 
     if (!context) {
         // Grafo sem `ProjectContext`: gerado por synesis-graph anterior a 0.8.0.
         stream.markdown(
-            `Conectado ao banco **${database}**.\n\n` +
-                'Este grafo não traz o contexto do projeto — ele é gravado pelo ' +
-                '`synesis-graph` a partir da versão 0.8.0. Re-exportar o projeto faz o ' +
-                'assistente conhecer os campos, escalas e orientações do seu template.\n\n' +
-                'A partir da **0.9.0** vêm também a contagem de trechos anotados, a busca ' +
-                'full-text por palavra e o escopo das métricas de rede.\n\n' +
-                'Enquanto isso, posso responder sobre a estrutura do grafo.'
+            `Connected to the database **${database}**.\n\n` +
+                'This graph does not carry the project context — `synesis-graph` writes it ' +
+                'from version 0.8.0 on. Re-exporting the project lets the ' +
+                'assistant know the fields, scales and guidelines of your template.\n\n' +
+                'From **0.9.0** on it also brings the count of annotated excerpts, word ' +
+                'full-text search and the scope of the network metrics.\n\n' +
+                'Meanwhile, I can answer about the graph structure.'
         );
         return buildSuggestedQuestions(undefined, {}, []);
     }
@@ -1873,30 +1975,69 @@ async function renderWelcome(stream, tools, database, token, client, cache, cach
         lines.push(context.description, '');
     }
     const scale = [
-        context.sourceCount ? `**${context.sourceCount}** referências` : null,
-        context.itemCount ? `**${context.itemCount}** trechos analisados` : null,
-        context.conceptCount ? `**${context.conceptCount}** conceitos` : null
+        context.sourceCount ? `**${context.sourceCount}** references` : null,
+        context.itemCount ? `**${context.itemCount}** analysed excerpts` : null,
+        context.conceptCount ? `**${context.conceptCount}** concepts` : null
     ].filter(Boolean);
     if (scale.length) {
-        lines.push(`Este grafo reúne ${scale.join(', ')}.`, '');
+        lines.push(`This graph holds ${scale.join(', ')}.`, '');
     }
     if (taxonomy.values.length) {
         // O rótulo do template nomeia a linha: "Topic" vira "Topic mais
         // presentes", "Dimension" vira "Dimension mais presentes". Chamar tudo
         // de "temas" seria o vocabulário de um projeto imposto aos outros.
         lines.push(
-            `${taxonomy.label} mais presentes: ${taxonomy.values.map((t) => `\`${t}\``).join(', ')}.`,
+            `Most frequent ${taxonomy.label}: ${taxonomy.values.map((t) => `\`${t}\``).join(', ')}.`,
             ''
         );
     }
-    const staleness = describeStaleness(context.generatedAt);
+    // A saudação é interface (inglês); o mesmo aviso, no prompt, segue o
+    // idioma do projeto (renderProjectContext).
+    const staleness = withPromptLanguage('en', () => describeStaleness(context.generatedAt));
     if (staleness) {
         lines.push(`⚠️ ${staleness}`, '');
     }
-    lines.push('Pergunte o que quiser sobre o corpus — ou escolha uma sugestão abaixo.');
+    lines.push('Ask anything about the corpus — or pick a suggestion below.');
 
     stream.markdown(lines.join('\n'));
     return buildSuggestedQuestions(context, taxonomy, (schema && schema.metricNames) || []);
+}
+
+/**
+ * Escolhe o idioma dos prompts deste turno pelo projeto aberto.
+ *
+ * O projeto é o `.synp` que contém o arquivo ativo (o mais interno, se houver
+ * vários); sem editor ativo, o primeiro `.synp` do workspace. O idioma vem do
+ * `.env` desse projeto (`SYNESIS_CODER_LANGUAGE`) — ver `promptLanguage.js`.
+ * Qualquer falha cai no inglês: a pergunta segue, só o idioma da instrução muda.
+ */
+async function applyProjectPromptLanguage() {
+    try {
+        const folders = vscode.workspace.workspaceFolders || [];
+        const projects = await vscode.workspace.findFiles('**/*.synp', '**/{node_modules,.git}/**', 200);
+        const editor = vscode.window.activeTextEditor;
+        const active = editor && editor.document && editor.document.uri ? editor.document.uri.fsPath : '';
+        let chosen = projects[0];
+        if (active) {
+            const containing = projects
+                .filter((uri) => active.toLowerCase().startsWith(path.dirname(uri.fsPath).toLowerCase()))
+                .sort((a, b) => b.fsPath.length - a.fsPath.length);
+            if (containing[0]) {
+                chosen = containing[0];
+            }
+        }
+        const folder = chosen ? vscode.workspace.getWorkspaceFolder(chosen) : folders[0];
+        const projectDir = chosen ? path.dirname(chosen.fsPath) : folder && folder.uri.fsPath;
+        const coderPath = vscode.workspace.getConfiguration('synesisExplorer').get('coder.path', '');
+        const { language } = resolvePromptLanguage({
+            projectDir,
+            workspaceDir: folder && folder.uri.fsPath,
+            coderPath
+        });
+        return setPromptLanguage(language);
+    } catch (_error) {
+        return setPromptLanguage(undefined);
+    }
 }
 
 function registerChatParticipant(context) {
@@ -1929,6 +2070,11 @@ function registerChatParticipant(context) {
 
     const handler = async (request, chatContext, stream, token) => {
         const selectedDatabase = getSelectedDatabase(context);
+
+        // O idioma dos prompts sai do projeto aberto e vale para TODO o turno:
+        // descrições das ferramentas (resolveGraphTools), prompt de sistema e
+        // sugestões. Por isso vem antes de qualquer um deles.
+        await applyProjectPromptLanguage();
 
         // Prompt vazio: apresenta o projeto em vez de mandar mensagem vazia ao
         // provedor. Precisa das ferramentas para ler o grafo, daí o start aqui.
@@ -1980,8 +2126,8 @@ function registerChatParticipant(context) {
             // "configure a conexão" a quem acabou de configurá-la.
             const next = describeNextStep(await readConnectionStatus(context, false));
             stream.markdown(
-                '**Não consultei o banco.** Nenhuma conexão com o grafo está disponível, ' +
-                    'então qualquer resposta minha sobre os dados seria inventada.\n\n' +
+                '**I did not query the database.** No graph connection is available, ' +
+                    'so any answer of mine about the data would be made up.\n\n' +
                     (next ? next.message : '')
             );
             if (next) {
@@ -2007,7 +2153,10 @@ function registerChatParticipant(context) {
 
         // O banco escolhido entra no prompt a cada turno, não na ativação: o
         // pesquisador pode trocar de banco no meio da conversa.
-        let systemPrompt = buildSystemPromptWithDatabase(SYSTEM_PROMPT, selectedDatabase);
+        let systemPrompt = buildSystemPromptWithDatabase(
+            pick({ en: SYSTEM_PROMPT, pt: SYSTEM_PROMPT_PT }),
+            selectedDatabase
+        );
 
         // Contexto do projeto, gravado no grafo pelo synesis-graph >= 0.8.0.
         //
@@ -2130,13 +2279,13 @@ function registerChatParticipant(context) {
             if (outcome && outcome.kind === TurnKind.EVIDENCE) {
                 stream.button({
                     command: AUDIT_COMMAND,
-                    title: 'Ver evidências e consultas do turno',
+                    title: 'Show turn evidence and queries',
                     arguments: [trace.turnId]
                 });
             } else if (outcome && outcome.kind === TurnKind.AGGREGATE) {
                 stream.button({
                     command: AUDIT_COMMAND,
-                    title: 'Ver consultas e unidades do turno',
+                    title: 'Show turn queries and units',
                     arguments: [trace.turnId]
                 });
             }
@@ -2157,11 +2306,11 @@ function registerChatParticipant(context) {
             if (sessionTurns.length > 1 && metricsButtonEnabled()) {
                 stream.button({
                     command: METRICS_COMMAND,
-                    title: `Métricas da sessão (${sessionTurns.length} perguntas)`
+                    title: `Session metrics (${sessionTurns.length} questions)`
                 });
             }
         } catch (error) {
-            stream.markdown(`\n\n**Erro:** ${error.message || error}`);
+            stream.markdown(`\n\n**Error:** ${error.message || error}`);
         }
     };
 
@@ -2185,8 +2334,8 @@ function registerChatParticipant(context) {
             const trace = turnId ? traceStore.get(turnId) : undefined;
             if (!trace) {
                 vscode.window.showInformationMessage(
-                    'Synesis: o registro deste turno não está mais disponível. ' +
-                        'A trilha cobre as respostas recentes desta sessão.'
+                    'Synesis: the record of this turn is no longer available. ' +
+                        'The trail covers the recent answers of this session.'
                 );
                 return;
             }
@@ -2218,21 +2367,24 @@ function registerChatParticipant(context) {
             const trace = turnId ? traceStore.get(turnId) : undefined;
             if (!trace) {
                 vscode.window.showInformationMessage(
-                    'Synesis: o registro deste turno não está mais disponível para reavaliação.'
+                    'Synesis: the record of this turn is no longer available for reassessment.'
                 );
                 return;
             }
             if (trace.database && trace.database !== getSelectedDatabase(context)) {
                 const choice = await vscode.window.showWarningMessage(
-                    `Este turno consultou o banco "${trace.database}", diferente do selecionado agora. ` +
-                        'A reavaliação usa o banco atual — o resultado pode não ser comparável.',
-                    'Reavaliar mesmo assim',
-                    'Cancelar'
+                    `This turn queried the database "${trace.database}", different from the one selected now. ` +
+                        'The reassessment uses the current database — the result may not be comparable.',
+                    'Reassess anyway',
+                    'Cancel'
                 );
-                if (choice !== 'Reavaliar mesmo assim') {
+                if (choice !== 'Reassess anyway') {
                     return;
                 }
             }
+            // O prompt de reavaliação é montado aqui, fora do handler: o idioma
+            // do projeto é resolvido antes, como no turno normal.
+            await applyProjectPromptLanguage();
             await vscode.commands.executeCommand('workbench.action.chat.open', {
                 query: `@synesis ${buildAuditPrompt(trace.question, trace.finalAnswer, traceQueries(trace))}`
             });
@@ -2248,7 +2400,7 @@ function registerChatParticipant(context) {
         vscode.commands.registerCommand(METRICS_COMMAND, async () => {
             if (sessionTurns.length === 0) {
                 vscode.window.showInformationMessage(
-                    'Synesis: nenhuma pergunta medida ainda nesta sessão. Pergunte algo ao @synesis primeiro.'
+                    'Synesis: no question measured yet in this session. Ask @synesis something first.'
                 );
                 return;
             }
@@ -2260,7 +2412,7 @@ function registerChatParticipant(context) {
             const regular = sessionTurns.filter((t) => !TRAP_QUESTIONS.includes(t.question));
 
             const report = renderReport(
-                `sessão (${sessionTurns.length} perguntas)`,
+                `session (${sessionTurns.length} questions)`,
                 summarize(regular.length ? regular : sessionTurns),
                 traps.length ? summarize(traps) : undefined,
                 {

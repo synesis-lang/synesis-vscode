@@ -210,8 +210,21 @@ class TopicTreeItem extends vscode.TreeItem {
 
         this.children = children;
         this.contextValue = 'ontologyTopic';
+        this.concept = label;
 
-        if (children.length > 0) {
+        if (typeof topic.itemsSubtree === 'number') {
+            // Arvore da hierarquia: especie, ITEMs proprios/da subarvore e
+            // marca de conceito sem fundamentacao (sem mencao nem descendente).
+            this.contextValue = 'ontologyConcept';
+            const species = topic.species ? `${topic.species} · ` : '';
+            this.description = `${species}${topic.items}/${topic.itemsSubtree} ITEMs`;
+            this.iconPath = new vscode.ThemeIcon(
+                topic.ungrounded ? 'warning' : (children.length > 0 ? 'type-hierarchy' : 'symbol-class')
+            );
+            if (topic.ungrounded) {
+                this.tooltip = 'Ungrounded: no mention of its own or of a descendant';
+            }
+        } else if (children.length > 0) {
             this.iconPath = new vscode.ThemeIcon('tag');
             this.description = `(${children.length})`;
         } else {
@@ -225,7 +238,7 @@ class TopicTreeItem extends vscode.TreeItem {
         }
 
         if (topic.file) {
-            this.tooltip = topic.file;
+            this.tooltip = this.tooltip || topic.file;
             this.command = {
                 command: 'synesis.openLocation',
                 title: 'Open Location',

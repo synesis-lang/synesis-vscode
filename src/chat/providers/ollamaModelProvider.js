@@ -231,7 +231,7 @@ class OllamaModelProvider {
         } catch (error) {
             // Não há lista fixa possível: os modelos são os que o pesquisador
             // instalou. Servidor fora do ar = provedor ausente do seletor.
-            console.warn(`Synesis Chat: Ollama indisponível em ${baseUrl}.`, error && error.message);
+            console.warn(`Synesis Chat: Ollama unavailable at ${baseUrl}.`, error && error.message);
             return [];
         }
         return (models || []).map((m) => ({
@@ -249,7 +249,7 @@ class OllamaModelProvider {
     async provideLanguageModelChatResponse(model, messages, options, progress, token) {
         const baseUrl = this.getBaseUrl();
         if (!baseUrl) {
-            throw new Error('Synesis Chat: configure o endereço do Ollama na página de configuração do Synesis.');
+            throw new Error('Synesis Chat: set the Ollama address on the Synesis settings page.');
         }
 
         const settings = this.getRequestSettings();
@@ -287,7 +287,7 @@ class OllamaModelProvider {
             if (error && error.name === 'AbortError') {
                 throw error;
             }
-            throw new Error(`Ollama em ${baseUrl} não pôde ser alcançado: ${error && error.message}`, { cause: error });
+            throw new Error(`Ollama at ${baseUrl} could not be reached: ${error && error.message}`, { cause: error });
         }
 
         if (!response.ok) {

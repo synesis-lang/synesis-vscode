@@ -1,3 +1,4 @@
+const path = require('path');
 /**
  * coderService.js - Integração com synesis-coder CLI
  *
@@ -53,13 +54,13 @@ class CoderService {
     async codeSelection(editor) {
         // 1. Validar seleção
         if (editor.selection.isEmpty) {
-            vscode.window.showWarningMessage('Selecione um trecho de texto para codificar.');
+            vscode.window.showWarningMessage('Select a text excerpt to code.');
             return;
         }
 
         const selectedText = editor.document.getText(editor.selection);
         if (!selectedText.trim()) {
-            vscode.window.showWarningMessage('A seleção está vazia.');
+            vscode.window.showWarningMessage('The selection is empty.');
             return;
         }
 
@@ -67,7 +68,7 @@ class CoderService {
         let bibref = await this._detectBibref(editor);
         if (!bibref) {
             const input = await vscode.window.showInputBox({
-                prompt: 'Nenhum bloco SOURCE/ITEM encontrado. Informe o bibref (ex: smith2024)',
+                prompt: 'No SOURCE/ITEM block found. Enter the bibref (e.g. smith2024)',
                 placeHolder: 'smith2024'
             });
             if (!input) {
@@ -80,8 +81,8 @@ class CoderService {
         const projectUri = await this._workspaceScanner.findProjectFile();
         if (!projectUri) {
             vscode.window.showErrorMessage(
-                'Nenhum arquivo .synp encontrado no workspace. ' +
-                'Abra uma pasta que contenha um projeto Synesis.'
+                'No .synp file found in the workspace. ' +
+                'Open a folder that contains a Synesis project.'
             );
             return;
         }
@@ -94,7 +95,7 @@ class CoderService {
             output = await vscode.window.withProgress(
                 {
                     location: vscode.ProgressLocation.Notification,
-                    title: 'Synesis: Codificando seleção...',
+                    title: 'Synesis: Coding selection...',
                     cancellable: true
                 },
                 (progress, token) => this._runCoderCli(projectPath, bibref, selectedText, token)
@@ -108,7 +109,7 @@ class CoderService {
         }
 
         if (!output || !output.trim()) {
-            vscode.window.showWarningMessage('synesis-coder não retornou nenhum conteúdo.');
+            vscode.window.showWarningMessage('synesis-coder returned no content.');
             return;
         }
 
@@ -247,6 +248,10 @@ class CoderService {
                 coderPath,
                 args,
                 {
+                    // Pasta do projeto: o coder lê o `.env` dela (idioma do
+                    // projeto, SYNESIS_CODER_LANGUAGE) antes do seu próprio.
+                    // `projectPath` é absoluto, então o cwd não altera os argumentos.
+                    cwd: path.dirname(projectPath),
                     timeout: 120000,
                     maxBuffer: 1024 * 1024,
                     encoding: 'utf-8',
@@ -259,15 +264,15 @@ class CoderService {
                 (error, stdout, stderr) => {
                     if (error) {
                         if (error.killed) {
-                            reject({ message: 'Operação cancelada.', cancelled: true });
+                            reject({ message: 'Operation cancelled.', cancelled: true });
                             return;
                         }
 
                         // Detectar erro de executável não encontrado
                         if (error.code === 'ENOENT') {
                             reject({
-                                message: `synesis-coder não encontrado em '${coderPath}'. ` +
-                                    'Instale com: pip install synesis-coder'
+                                message: `synesis-coder not found at '${coderPath}'. ` +
+                                    'Install it with: pip install synesis-coder'
                             });
                             return;
                         }

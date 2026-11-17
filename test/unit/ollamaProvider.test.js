@@ -129,7 +129,7 @@ describe('Catálogo do Ollama', () => {
     it('servidor fora do ar é erro, não lista vazia', async () => {
         // O provider transforma o erro em "sem modelos"; o painel, em mensagem.
         const fetchImpl = async () => jsonResponse({}, 500);
-        await assert.rejects(fetchOllamaModels('http://srv:11434', { fetchImpl }), /Ollama indisponível/);
+        await assert.rejects(fetchOllamaModels('http://srv:11434', { fetchImpl }), /Ollama unavailable/);
     });
 
     it('toda consulta ao servidor tem prazo', async () => {

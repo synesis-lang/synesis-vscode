@@ -139,7 +139,7 @@ class OpenAiCompatibleModelProvider {
                 // Catálogo indisponível não pode esvaziar o seletor: cair na
                 // lista fixa mantém o chat utilizável.
                 console.warn(
-                    `Synesis Chat: catálogo ${this.vendorLabel} indisponível, usando a lista fixa.`,
+                    `Synesis Chat: ${this.vendorLabel} catalog unavailable, using the fixed list.`,
                     error && error.message
                 );
             }
@@ -163,7 +163,7 @@ class OpenAiCompatibleModelProvider {
     async provideLanguageModelChatResponse(model, messages, options, progress, token) {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
-            throw new Error(`Synesis Chat: configure a API key da ${this.vendorLabel} (comando "Synesis: Configuração").`);
+            throw new Error(`Synesis Chat: set the ${this.vendorLabel} API key (command "Synesis: Settings").`);
         }
 
         const body = {

@@ -87,9 +87,9 @@ describe('Diagnóstico: qual é o passo seguinte', () => {
             hasTools: false,
             hasCredentials: false,
             hasWorkspace: true,
-            gap: 'Falta a senha da conexão "face85 local".'
+            gap: 'The password of the connection "face85 local" is missing.'
         });
-        assert.ok(next.message.includes('Falta a senha'));
+        assert.ok(next.message.includes('password'));
         assert.ok(next.message.includes('face85 local'));
     });
 
@@ -100,7 +100,7 @@ describe('Diagnóstico: qual é o passo seguinte', () => {
             hasWorkspace: true,
             hasProfiles: true
         });
-        assert.ok(/nenhuma está marcada como ativa/i.test(next.message));
+        assert.ok(/none is marked as active/i.test(next.message));
     });
 
     it('credencial salva e nada respondendo: NÃO pede configurar de novo', () => {
@@ -117,7 +117,7 @@ describe('Diagnóstico: qual é o passo seguinte', () => {
         assert.notStrictEqual(next.command, 'synesis.chat.configureConnection');
         // O botão leva ao teste de conexão, que informa a causa real, em vez de
         // reabrir o formulário que o pesquisador já preencheu corretamente.
-        assert.strictEqual(next.title, 'Testar conexão');
+        assert.strictEqual(next.title, 'Test connection');
     });
 
     it('nomeia a causa provável em vez de repetir o pedido genérico', () => {
@@ -130,7 +130,7 @@ describe('Diagnóstico: qual é o passo seguinte', () => {
         });
         // Precisa dizer que o problema NÃO é a configuração, e mostrar o
         // endereço concreto para o pesquisador poder conferir o servidor.
-        assert.ok(/não é a configuração/i.test(next.message));
+        assert.ok(/is not the configuration/i.test(next.message));
         assert.ok(next.message.includes('http://host:2480'));
     });
 
@@ -141,7 +141,7 @@ describe('Diagnóstico: qual é o passo seguinte', () => {
             hasWorkspace: false,
             uri: 'http://host:2480'
         });
-        assert.ok(/pasta/i.test(next.message));
+        assert.ok(/folder/i.test(next.message));
         assert.notStrictEqual(next.command, 'synesis.chat.configureConnection');
     });
 

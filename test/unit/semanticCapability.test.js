@@ -12,12 +12,16 @@
  */
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const {
     renderSemanticCapability,
     renderProjectContext
 } = require('../../src/chat/chatParticipant');
 
 describe('Busca semântica — quando a instrução entra no prompt', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('não entra em grafo sem vetores', () => {
         // Neo4j hoje, e qualquer grafo exportado sem --vector-embeddings.
         assert.strictEqual(renderSemanticCapability({ conceptLabel: 'Chain' }), undefined);
@@ -61,10 +65,13 @@ describe('Busca semântica — quando a instrução entra no prompt', () => {
 });
 
 describe('Busca semântica — a consulta ensinada', () => {
-    const text = renderSemanticCapability({
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
+    const text = withPromptLanguage('pt', () => renderSemanticCapability({
         conceptLabel: 'Chain',
         embeddingFields: 'ontology_description'
-    });
+    }));
 
     it('usa a forma LET, verificada contra o ArcadeDB real', () => {
         // O subselect inline falha com "Unsupported query vector type:
@@ -99,10 +106,13 @@ describe('Busca semântica — a consulta ensinada', () => {
 });
 
 describe('Busca semântica — exato vs. aproximado', () => {
-    const text = renderSemanticCapability({
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
+    const text = withPromptLanguage('pt', () => renderSemanticCapability({
         conceptLabel: 'Chain',
         embeddingFields: 'ontology_description'
-    });
+    }));
 
     it('exige marcar que o resultado é por proximidade', () => {
         // A quarta distinção de origem: sem ela uma vizinhança vetorial passa
@@ -129,6 +139,9 @@ describe('Busca semântica — exato vs. aproximado', () => {
 });
 
 describe('Busca semântica — integração no contexto do projeto', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('a instrução acompanha o contexto quando há capacidade', () => {
         const rendered = renderProjectContext({
             description: 'Projeto X',

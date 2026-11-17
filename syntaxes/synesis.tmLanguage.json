@@ -26,7 +26,7 @@
       "patterns": [
         {
           "name": "keyword.control.block.synesis",
-          "match": "(?i)\\b(SOURCE|ITEM|ONTOLOGY|END|PROJECT|TEMPLATE|FIELDS|METADATA|DESCRIPTION|INCLUDE|BIBLIOGRAPHY|ANNOTATIONS)\\b"
+          "match": "(?i)\\b(SOURCE|ITEM|ONTOLOGY|END|PROJECT|TEMPLATE|FIELDS|METADATA|DESCRIPTION|INCLUDE|BIBLIOGRAPHY|ANNOTATIONS|QUESTIONS|EXPORT|MAP|ROLE|PHASE)\\b"
         },
         {
           "name": "keyword.control.field.synesis",

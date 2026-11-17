@@ -235,13 +235,33 @@ class LspDataProvider {
         const resolvedFile = this._resolveFilePath(topic.file, workspaceRoot);
         const normalizedLine = typeof topic.line === 'number' ? Math.max(0, topic.line - 1) : 0;
 
-        return {
+        const normalized = {
             name: topic.name || '',
             level: typeof topic.level === 'number' ? topic.level : 0,
             file: resolvedFile,
             line: normalizedLine,
             children: normalizedChildren
         };
+        // Arvore da hierarquia (papeis HIERARCHY, synesis-lsp com etapa A2d):
+        // especie da ligacao ao pai, ITEMs proprios e da subarvore, fundamentacao.
+        if (typeof topic.itemsSubtree === 'number') {
+            normalized.species = topic.species || '';
+            normalized.items = topic.items || 0;
+            normalized.itemsSubtree = topic.itemsSubtree;
+            normalized.ungrounded = Boolean(topic.ungrounded);
+        }
+        return normalized;
+    }
+
+    async getSubtreeEvidence(workspaceRoot, concept) {
+        const result = await this._sendRequestWithFallback(
+            'synesis/getSubtreeEvidence',
+            { workspaceRoot, concept }
+        );
+        if (!result || !result.success) {
+            return null;
+        }
+        return Array.isArray(result.items) ? result.items : [];
     }
 
     async getExcerpts(workspaceRoot, bibref) {
@@ -392,6 +412,11 @@ class DataService {
 
     async getRelationGraph(bibref) {
         return this._callLsp('getRelationGraph', bibref);
+    }
+
+    async getSubtreeEvidence(workspaceRoot, concept) {
+        // Hierarquia por papel (etapa A2d): pede direto ao LSP; sem LSP, nada.
+        return this.lspProvider ? this.lspProvider.getSubtreeEvidence(workspaceRoot, concept) : null;
     }
 
     async getRelationGraphForItem(itemBibref, itemLine, itemFile) {
@@ -573,3 +598,4 @@ class DataService {
 }
 
 module.exports = DataService;
+module.exports.LspDataProvider = LspDataProvider;

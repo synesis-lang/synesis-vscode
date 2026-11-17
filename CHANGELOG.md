@@ -5,7 +5,53 @@ All notable changes to the Synesis extension will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.17.0] - 2026-11-17
+
+### Changed — interface em inglês; prompts no idioma do projeto
+
+- **Interface em inglês** (idioma oficial das saídas, 2026-11-17): títulos de
+  comandos, configurações (`package.json`), página de configuração, avisos e
+  botões do chat, trilha de auditoria, relatório de métricas, conexões e
+  provedores. Os títulos citados nas mensagens agora batem com os comandos que
+  existem (`Synesis: Select Chat Graph Database`, `Synesis: Settings`); antes
+  apontavam "Configurar Conexão do Banco" e "Conectar ao ArcadeDB (MCP)", que
+  não existem mais.
+- **Prompts do chat no idioma do projeto.** O texto que vai ao modelo (prompt
+  de sistema, regras de contagem e de citação, schema, métricas, busca
+  semântica e lexical, propriedades observadas, descrições das ferramentas,
+  perguntas sugeridas e o prompt de reavaliação) existe em inglês e em
+  português, escolhido a cada turno por `SYNESIS_CODER_LANGUAGE` no `.env` do
+  projeto (`src/chat/promptLanguage.js`): `.env` da pasta do `.synp` subindo até
+  o workspace → `.env` ao lado do executável do coder → variável de ambiente →
+  inglês. A resposta continua no idioma da pergunta. Social Acceptance: inglês;
+  face85: português.
+- O `synesis-coder` (comando de codificar seleção) roda com `cwd` na pasta do
+  projeto, para ler o `.env` dela.
+
+### Added
+
+- `test/unit/promptLanguage.test.js` (16 testes): resolução do idioma,
+  precedência, paridade de nomes técnicos entre os dois prompts de sistema.
+
+### Fixed
+
+- Gramática TextMate: `PHASE` colorido como palavra-chave de bloco, como
+  `QUESTIONS`, `EXPORT`, `MAP` e `ROLE`.
+
+### Added — árvore da hierarquia (etapa A2d)
+
+- O explorador de ontologia mostra a hierarquia adotada quando o template
+  declara `ROLE HIERARCHY` (synesis-lsp >= etapa A2d): espécie da ligação,
+  ITEMs próprios / da subárvore e ícone de aviso nos conceitos sem
+  fundamentação.
+- Comando **Evidências da subárvore** no menu de contexto de um conceito:
+  lista os ITEMs do conceito e de todos os descendentes, sem repetir, e abre o
+  escolhido.
+- Coloração de `ROLE` como palavra-chave.
+
+### Added
+
+- Coloração de `QUESTIONS`, `EXPORT` e `MAP` como palavras-chave no `.synp`.
 
 ## [0.16.0] - 2026-10-14
 

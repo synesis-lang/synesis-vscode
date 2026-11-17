@@ -286,8 +286,8 @@ describe('Juiz de citações — aviso ao pesquisador', () => {
         // Pode ser recorte ou tradução; o que se afirma é que aquele texto não
         // está no que o banco devolveu.
         const text = describeUnverified(['x'.repeat(40)]);
-        assert.match(text, /não (foi|foram) encontrad/);
-        assert.match(text, /banco devolveu/);
+        assert.match(text, /(was|were) not found/);
+        assert.match(text, /database returned/);
     });
 
     it('não promete que o resto da resposta está íntegro', () => {
@@ -296,15 +296,15 @@ describe('Juiz de citações — aviso ao pesquisador', () => {
         // confere pode sustentar exatamente a conclusão principal, e o resto da
         // resposta nunca foi verificado.
         const text = describeUnverified(['x'.repeat(40)]);
-        assert.ok(!/não são afetadas/.test(text));
+        assert.ok(!/are not affected/.test(text));
     });
 
     it('declara o que a verificação cobre, e o que não cobre', () => {
         // O nome honesto é "literalidade": existe no registro, sim; sustenta a
         // afirmação, não se sabe.
         const text = describeUnverified(['x'.repeat(40)]);
-        assert.match(text, /literalidade/i);
-        assert.match(text, /não diz se a citação sustenta a afirmação/i);
+        assert.match(text, /literalness/i);
+        assert.match(text, /does not\s+say whether the quotation supports the claim/i);
     });
 
     it('trunca citação longa no aviso', () => {
@@ -315,7 +315,7 @@ describe('Juiz de citações — aviso ao pesquisador', () => {
 
     it('usa plural quando há mais de uma', () => {
         const text = describeUnverified(['a'.repeat(30), 'b'.repeat(30)]);
-        assert.match(text, /Citações não conferidas/);
+        assert.match(text, /Unchecked quotations/);
     });
 });
 

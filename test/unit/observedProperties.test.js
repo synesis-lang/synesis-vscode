@@ -12,6 +12,7 @@
  */
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const {
     collectObserved,
     describeType,
@@ -45,6 +46,9 @@ const SOURCE_ROW = {
 const SOURCE_DECLARED = ['bibtex', 'title'];
 
 describe('Tipos observados', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('distingue número de texto numérico', () => {
         // A distinção que decide se `sum()` funciona ou estoura.
         assert.strictEqual(describeType(38), 'número inteiro');
@@ -62,6 +66,9 @@ describe('Tipos observados', () => {
 });
 
 describe('Coleta por amostragem', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('descarta as chaves estruturais do vértice', () => {
         const observed = collectObserved([SOURCE_ROW]);
 
@@ -83,6 +90,9 @@ describe('Coleta por amostragem', () => {
 });
 
 describe('Diferença contra o declarado', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('devolve só o que o schema não anuncia', () => {
         const undeclared = undeclaredFrom(collectObserved([SOURCE_ROW]), SOURCE_DECLARED);
         const names = undeclared.map((e) => e.name);
@@ -117,6 +127,9 @@ describe('Diferença contra o declarado', () => {
 });
 
 describe('Tamanho da amostra', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('encolhe para uma linha quando o vértice tem embedding', () => {
         // Medido no `Chain` deste corpus: 384 floats por linha, 5,5 KB dos
         // 5,6 KB de uma linha — trafegados e descartados, porque só os nomes
@@ -139,6 +152,9 @@ describe('Tamanho da amostra', () => {
 });
 
 describe('Extração do nó da linha de resultado', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('aceita o nó na raiz da linha', () => {
         assert.strictEqual(unwrapNode(SOURCE_ROW).total_score, 38);
     });
@@ -156,6 +172,9 @@ describe('Extração do nó da linha de resultado', () => {
 });
 
 describe('Seção de prompt', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('não gera seção quando não há nada a acrescentar', () => {
         assert.strictEqual(renderObservedProperties([]), '');
         assert.strictEqual(renderObservedProperties([{ label: 'Source', undeclared: [] }]), '');
@@ -202,6 +221,9 @@ describe('Seção de prompt', () => {
 });
 
 describe('Chave de agrupamento (A2)', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     // Medido no corpus real: 3.027 Sources, 3.027 bibtex distintos, 2.997
     // títulos. "Lucas Vieira" são três pessoas — agrupar por título somava os
     // trechos das três e produzia um score que não existe.
@@ -249,6 +271,9 @@ describe('Chave de agrupamento (A2)', () => {
 });
 
 describe('Ambiguidade de ranking (A1)', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     const CAMPOS = [
         { name: 'total_score', type: 'número inteiro' },
         { name: 'normalized_score', type: 'número inteiro' },
@@ -281,6 +306,9 @@ describe('Ambiguidade de ranking (A1)', () => {
 });
 
 describe('Desduplicação contra o template_doc (R1)', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     const ENTRADA = [
         {
             label: 'Source',
@@ -314,6 +342,9 @@ describe('Desduplicação contra o template_doc (R1)', () => {
 });
 
 describe('Ruído que a verificação ao vivo revelou', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('não trata categoria de baixa cardinalidade como chave quase-única', () => {
         // `evaluation_origin`: 2 valores em 249.735 linhas. Ninguém o confunde
         // com identificador — avisar sobre ele afoga o aviso que importa.

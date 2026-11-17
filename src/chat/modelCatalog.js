@@ -167,7 +167,7 @@ async function fetchAnthropicModels(apiKey, { fetchImpl = fetch } = {}) {
         headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' }
     });
     if (!response || !response.ok) {
-        throw new Error(`catálogo Anthropic indisponível (HTTP ${response && response.status})`);
+        throw new Error(`Anthropic catalog unavailable (HTTP ${response && response.status})`);
     }
     const payload = await response.json();
     return ((payload && payload.data) || [])
@@ -197,7 +197,7 @@ async function fetchOpenAiModels(apiKey, { fetchImpl = fetch } = {}) {
         headers: { Authorization: `Bearer ${apiKey}` }
     });
     if (!response || !response.ok) {
-        throw new Error(`catálogo OpenAI indisponível (HTTP ${response && response.status})`);
+        throw new Error(`OpenAI catalog unavailable (HTTP ${response && response.status})`);
     }
     const payload = await response.json();
     return ((payload && payload.data) || [])
@@ -225,7 +225,7 @@ async function fetchGeminiModels(apiKey, { fetchImpl = fetch } = {}) {
         `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(apiKey)}&pageSize=200`
     );
     if (!response || !response.ok) {
-        throw new Error(`catálogo Gemini indisponível (HTTP ${response && response.status})`);
+        throw new Error(`Gemini catalog unavailable (HTTP ${response && response.status})`);
     }
     const payload = await response.json();
     return ((payload && payload.models) || [])
@@ -308,7 +308,7 @@ async function fetchOllamaModels(
 
     const response = await fetchImpl(`${root}/api/tags`, { signal: AbortSignal.timeout(timeoutMs) });
     if (!response || !response.ok) {
-        throw new Error(`Ollama indisponível em ${root} (HTTP ${response && response.status})`);
+        throw new Error(`Ollama unavailable at ${root} (HTTP ${response && response.status})`);
     }
     const payload = await response.json();
     const names = ((payload && payload.models) || [])

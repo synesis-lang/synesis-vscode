@@ -343,23 +343,23 @@ function renderExperimentHeader(context = {}) {
     const models = [...new Set((context.models || []).filter(Boolean))];
     const databases = [...new Set((context.databases || []).filter(Boolean))];
 
-    const lines = ['### Condições da medição', ''];
-    lines.push(`- Modelo: ${models.length ? models.join(', ') : 'não registrado'}`);
-    lines.push(`- Banco: ${databases.length ? databases.join(', ') : 'não registrado'}`);
+    const lines = ['### Measurement conditions', ''];
+    lines.push(`- Model: ${models.length ? models.join(', ') : 'not recorded'}`);
+    lines.push(`- Database: ${databases.length ? databases.join(', ') : 'not recorded'}`);
     if (context.snapshot) {
-        lines.push(`- Snapshot do grafo: ${context.snapshot}`);
+        lines.push(`- Graph snapshot: ${context.snapshot}`);
     }
-    lines.push(`- Relatório gerado em: ${new Date().toISOString()}`);
+    lines.push(`- Report generated at: ${new Date().toISOString()}`);
 
     if (models.length > 1 || databases.length > 1) {
         lines.push('');
         lines.push(
-            '⚠️ **Esta sessão misturou ' +
-                [models.length > 1 && 'modelos', databases.length > 1 && 'bancos']
+            '⚠️ **This session mixed ' +
+                [models.length > 1 && 'models', databases.length > 1 && 'databases']
                     .filter(Boolean)
-                    .join(' e ') +
-                '.** Os números agregados abaixo não são comparáveis com os de outra ' +
-                'sessão: comece uma série nova para comparar.'
+                    .join(' and ') +
+                '.** The aggregate numbers below are not comparable with those of another ' +
+                'session: start a new series to compare.'
         );
     }
 
@@ -375,65 +375,65 @@ function renderExperimentHeader(context = {}) {
  * do que mede.
  */
 function renderReport(label, summary, trapSummary, context = {}) {
-    const lines = [`## Métricas — ${label}`, ''];
+    const lines = [`## Metrics — ${label}`, ''];
     lines.push(...renderExperimentHeader(context));
 
-    lines.push('| Métrica | Valor | O que significa |');
+    lines.push('| Metric | Value | What it means |');
     lines.push('|---|---|---|');
-    lines.push(`| Perguntas | ${summary.turns} | turnos medidos |`);
+    lines.push(`| Questions | ${summary.turns} | measured turns |`);
     lines.push(
-        `| Rodadas de modelo (média) | ${orNA(summary.avgModelRequests || summary.avgRounds)} | ` +
-            'chamadas ao modelo até responder — não é o número de consultas |'
+        `| Model rounds (mean) | ${orNA(summary.avgModelRequests || summary.avgRounds)} | ` +
+            'calls to the model until it answers — not the number of queries |'
     );
     lines.push(
-        `| Consultas do modelo | ${orNA(summary.toolCalls)} | ferramentas que o modelo invocou |`
+        `| Model queries | ${orNA(summary.toolCalls)} | tools the model invoked |`
     );
     lines.push(
-        `| Consultas da extensão | ${orNA(summary.prefetchCalls)} | schema e contexto, lidos antes do modelo |`
+        `| Extension queries | ${orNA(summary.prefetchCalls)} | schema and context, read before the model |`
     );
     lines.push(
-        `| Consultas sem dado | ${orNA(summary.emptyQueries)} | sem linhas, ou agregação zerada |`
+        `| Queries without data | ${orNA(summary.emptyQueries)} | no rows, or a zeroed aggregate |`
     );
-    lines.push(`| Falhas de ferramenta | ${orNA(summary.failedToolCalls)} | erros de chamada |`);
-    lines.push(`| Citações | ${summary.totalQuotes} | trechos que a resposta apresentou |`);
+    lines.push(`| Tool failures | ${orNA(summary.failedToolCalls)} | call errors |`);
+    lines.push(`| Quotations | ${summary.totalQuotes} | excerpts the answer presented |`);
     lines.push(
-        `| Precisão literal | ${orNA(summary.literalQuotePrecision)} | ` +
-            'fração das citações detectadas que existe num registro do banco |'
+        `| Literal precision | ${orNA(summary.literalQuotePrecision)} | ` +
+            'share of detected quotations that exist in a database record |'
     );
     lines.push(
-        `| Cobertura das afirmações | ${orNA(summary.claimCitationCoverage)} | ` +
-            'exige protocolo de evidência por afirmação — ainda não medida |'
+        `| Claim coverage | ${orNA(summary.claimCitationCoverage)} | ` +
+            'requires an evidence-per-claim protocol — not measured yet |'
     );
 
     if (trapSummary) {
         const total = trapSummary.turns;
         lines.push(
-            `| Abstenção | ${trapSummary.abstentions}/${total} | ` +
-                'perguntas-armadilha recusadas — deve ser o total |'
+            `| Abstention | ${trapSummary.abstentions}/${total} | ` +
+                'trap questions refused — should be the total |'
         );
     }
 
     lines.push('');
     lines.push(
-        '**Nenhuma destas métricas usa juiz LLM.** Precisão literal é comparação de ' +
-            'strings contra o registro que o banco devolveu; abstenção é resposta a ' +
-            'perguntas cuja resposta sabidamente não está no corpus.'
+        '**None of these metrics uses an LLM judge.** Literal precision is a string ' +
+            'comparison against the record the database returned; abstention is the answer to ' +
+            'questions whose answer is known not to be in the corpus.'
     );
     lines.push('');
     // O parágrafo mais importante do relatório: o que estes números NÃO são.
     lines.push(
-        '**O que estes números não medem.** Precisão literal diz que o trecho existe, ' +
-            'não que ele sustenta a afirmação que o acompanha — isso é entailment, e não ' +
-            'está medido aqui. Afirmações sem citação alguma são invisíveis a ela. E nada ' +
-            'disto mede se a resposta é *útil*: uma resposta que só repete citações pontua ' +
-            'alto e ajuda pouco.'
+        '**What these numbers do not measure.** Literal precision says the excerpt exists, ' +
+            'not that it supports the claim next to it — that is entailment, and it is not ' +
+            'measured here. Claims with no quotation at all are invisible to it. And none ' +
+            'of this measures whether the answer is *useful*: an answer that only repeats quotations scores ' +
+            'high and helps little.'
     );
     lines.push('');
     lines.push(
-        '**Compare, não leia em absoluto.** Um valor sozinho diz pouco; o mesmo conjunto ' +
-            'de perguntas, no mesmo banco e snapshot, em dois modelos diz muito. As ' +
-            'perguntas-armadilha abaixo são genéricas: um corpus que trate legitimamente ' +
-            'de política monetária ou de solos precisa da sua própria bateria.'
+        '**Compare, do not read in absolute terms.** A single value says little; the same set ' +
+            'of questions, on the same database and snapshot, in two models says a lot. The ' +
+            'trap questions are generic: a corpus that legitimately covers ' +
+            'monetary policy or soils needs its own battery.'
     );
 
     return lines.join('\n');

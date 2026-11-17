@@ -20,6 +20,7 @@
 require('../helpers/vscodeMock').install();
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const { invokeGraphTool } = require('../../src/chat/graphClients');
 
 /** Cliente que acusa se a validação deixar passar. */
@@ -39,6 +40,9 @@ function clientEspiao() {
 }
 
 describe('Chamada de ferramenta sem argumento obrigatório', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('não vai à rede quando `query` falta — o caso do modelo pequeno', async () => {
         const client = clientEspiao();
 
@@ -119,6 +123,9 @@ describe('Chamada de ferramenta sem argumento obrigatório', () => {
 });
 
 describe('Chamada bem formada continua passando', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('query completa chega ao cliente com os argumentos certos', async () => {
         const client = clientEspiao();
 

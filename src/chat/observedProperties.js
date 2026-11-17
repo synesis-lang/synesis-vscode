@@ -1,3 +1,4 @@
+const { pick } = require('./promptLanguage');
 /**
  * O que o banco GUARDA, e não apenas o que ele DECLARA.
  *
@@ -78,6 +79,23 @@ const EMBEDDING_SAMPLE_SIZE = 1;
 function sampleSizeFor(vertex) {
     const names = ((vertex && vertex.properties) || []).map((p) => p && p.name);
     return names.includes(EMBEDDING_KEY) ? EMBEDDING_SAMPLE_SIZE : SAMPLE_SIZE;
+}
+
+/**
+ * Rótulo do tipo no prompt, no idioma do projeto. O código interno (`e.type`,
+ * comparado em várias regras abaixo) continua o mesmo nos dois idiomas.
+ */
+const TYPE_LABELS = {
+    'número inteiro': { en: 'integer', pt: 'número inteiro' },
+    'número decimal': { en: 'decimal number', pt: 'número decimal' },
+    booleano: { en: 'boolean', pt: 'booleano' },
+    lista: { en: 'list', pt: 'lista' },
+    'texto numérico': { en: 'numeric text', pt: 'texto numérico' },
+    texto: { en: 'text', pt: 'texto' }
+};
+
+function typeLabel(type) {
+    return TYPE_LABELS[type] ? pick(TYPE_LABELS[type]) : type;
 }
 
 /** Tipo legível para o prompt, a partir do valor que o banco devolveu. */
@@ -187,13 +205,18 @@ function numericStringWarning(entries) {
         return '';
     }
     const names = numericText.map((e) => `\`${e.label}\``).join(', ');
-    return (
-        `\n\n**Atenção — número gravado como texto:** ${names}. ` +
-        'Agregação numérica direta FALHA nestes campos (`sum()` recusa texto) e ' +
-        '`ORDER BY` os ordena alfabeticamente, onde "9" vem depois de "38". ' +
-        'Converta antes de somar ou ordenar (`toInteger(...)` em Cypher) — e ' +
-        'prefira um campo já numérico, quando houver um que responda à pergunta.'
-    );
+    return pick({
+        en: `\n\n**Note — number stored as text:** ${names}. ` +
+            'Direct numeric aggregation FAILS on these fields (`sum()` rejects text) and ' +
+            '`ORDER BY` sorts them alphabetically, where "9" comes after "38". ' +
+            'Convert before summing or sorting (`toInteger(...)` in Cypher) — and ' +
+            'prefer a field that is already numeric, when one answers the question.',
+        pt: `\n\n**Atenção — número gravado como texto:** ${names}. ` +
+            'Agregação numérica direta FALHA nestes campos (`sum()` recusa texto) e ' +
+            '`ORDER BY` os ordena alfabeticamente, onde "9" vem depois de "38". ' +
+            'Converta antes de somar ou ordenar (`toInteger(...)` em Cypher) — e ' +
+            'prefira um campo já numérico, quando houver um que responda à pergunta.'
+    });
 }
 
 /**
@@ -277,15 +300,22 @@ function renderRankingAmbiguity(label, entries) {
         return '';
     }
     const names = candidates.map((n) => `\`${n}\``).join(', ');
-    return (
-        `**Mais de um campo de pontuação em \`${label}\`:** ${names}. ` +
-        'Eles não produzem necessariamente a mesma ordem — medido neste tipo de ' +
-        'corpus, um total bruto e sua versão normalizada divergem exatamente onde ' +
-        'a cobertura difere entre registros. Não escolha por conta própria qual ' +
-        'representa "melhor": diga por qual está ordenando e nomeie a unidade; ' +
-        'quando a pergunta não especificar, apresente por mais de um critério ou ' +
-        'pergunte qual o pesquisador quer.'
-    );
+    return pick({
+        en: `**More than one score field in \`${label}\`:** ${names}. ` +
+            'They do not necessarily produce the same order — measured on this kind of ' +
+            'corpus, a raw total and its normalised version diverge exactly where ' +
+            'coverage differs between records. Do not choose on your own which one ' +
+            'represents "better": say which one you are sorting by and name the unit; ' +
+            'when the question does not specify, present more than one criterion or ' +
+            'ask which one the researcher wants.',
+        pt: `**Mais de um campo de pontuação em \`${label}\`:** ${names}. ` +
+            'Eles não produzem necessariamente a mesma ordem — medido neste tipo de ' +
+            'corpus, um total bruto e sua versão normalizada divergem exatamente onde ' +
+            'a cobertura difere entre registros. Não escolha por conta própria qual ' +
+            'representa "melhor": diga por qual está ordenando e nomeie a unidade; ' +
+            'quando a pergunta não especificar, apresente por mais de um critério ou ' +
+            'pergunte qual o pesquisador quer.'
+    });
 }
 
 /**
@@ -328,7 +358,7 @@ function renderObservedProperties(byLabel) {
         if (!undeclared || undeclared.length === 0) {
             continue;
         }
-        const rendered = undeclared.map((e) => `\`${e.name}\` (${e.type})`).join(', ');
+        const rendered = undeclared.map((e) => `\`${e.name}\` (${typeLabel(e.type)})`).join(', ');
         lines.push(`  - \`${label}\`: ${rendered}`);
         for (const entry of undeclared) {
             numericTextEntries.push({ ...entry, label: `${label}.${entry.name}` });
@@ -349,13 +379,20 @@ function renderObservedProperties(byLabel) {
     const sections = [];
     if (lines.length > 0) {
         sections.push(
-            'Propriedades presentes no dado mas AUSENTES do schema declarado ' +
-                '(lidas por amostragem de algumas linhas, não pelo `get_schema`):\n' +
-                `${lines.join('\n')}\n` +
-                'Elas são consultáveis normalmente — o schema é que está incompleto, não o dado. ' +
-                'Por virem de amostra, podem não existir em todas as linhas: confirme com uma ' +
-                'consulta antes de afirmar cobertura total.' +
-                numericStringWarning(numericTextEntries)
+            pick({
+                en: 'Properties present in the data but MISSING from the declared schema ' +
+                    '(read by sampling a few rows, not from `get_schema`):\n' +
+                    `${lines.join('\n')}\n` +
+                    'They can be queried normally — it is the schema that is incomplete, not the data. ' +
+                    'Because they come from a sample, they may not exist in every row: confirm with a ' +
+                    'query before claiming full coverage.',
+                pt: 'Propriedades presentes no dado mas AUSENTES do schema declarado ' +
+                    '(lidas por amostragem de algumas linhas, não pelo `get_schema`):\n' +
+                    `${lines.join('\n')}\n` +
+                    'Elas são consultáveis normalmente — o schema é que está incompleto, não o dado. ' +
+                    'Por virem de amostra, podem não existir em todas as linhas: confirme com uma ' +
+                    'consulta antes de afirmar cobertura total.'
+            }) + numericStringWarning(numericTextEntries)
         );
     }
     // A orientação de chave (A2) sai de uma contagem EXATA sobre todo o vértice,
@@ -472,20 +509,33 @@ function renderIdentityGuidance(label, identity) {
     }
     const worst = identity.ambiguous
         .slice(0, 3)
-        .map((e) => `\`${e.name}\` (${e.distinct} valores para ${identity.total} vértices)`)
+        .map((e) =>
+            pick({
+                en: `\`${e.name}\` (${e.distinct} values for ${identity.total} vertices)`,
+                pt: `\`${e.name}\` (${e.distinct} valores para ${identity.total} vértices)`
+            })
+        )
         .join(', ');
     // Só os dois primeiros identificadores: o modelo precisa de UMA chave para
     // agrupar, não do inventário completo. Listar oito ocupa o prompt e ainda
     // devolve a escolha que o aviso existe para resolver.
-    const keys = identity.unique.slice(0, 2).map((n) => `\`${n}\``).join(' ou ');
-    const plural = identity.ambiguous.length > 1 ? 'esses campos' : 'esse campo';
-    return (
-        `**Chave de agrupamento em \`${label}\`:** ${keys} identifica cada vértice ` +
-        `unicamente. Já ${worst} REPETE entre vértices distintos — agrupar ou contar ` +
-        `por ${plural} funde registros diferentes num só e produz totais que não ` +
-        'pertencem a ninguém, sem erro visível. Agrupe pela chave única e use o campo ' +
-        'repetido apenas para exibição.'
-    );
+    const keys = identity.unique
+        .slice(0, 2)
+        .map((n) => `\`${n}\``)
+        .join(pick({ en: ' or ', pt: ' ou ' }));
+    const many = identity.ambiguous.length > 1;
+    return pick({
+        en: `**Grouping key in \`${label}\`:** ${keys} identifies each vertex ` +
+            `uniquely. ${worst}, however, REPEATS across distinct vertices — grouping or counting ` +
+            `by ${many ? 'those fields' : 'that field'} merges different records into one and produces totals that ` +
+            'belong to no one, with no visible error. Group by the unique key and use the ' +
+            'repeated field only for display.',
+        pt: `**Chave de agrupamento em \`${label}\`:** ${keys} identifica cada vértice ` +
+            `unicamente. Já ${worst} REPETE entre vértices distintos — agrupar ou contar ` +
+            `por ${many ? 'esses campos' : 'esse campo'} funde registros diferentes num só e produz totais que não ` +
+            'pertencem a ninguém, sem erro visível. Agrupe pela chave única e use o campo ' +
+            'repetido apenas para exibição.'
+    });
 }
 
 module.exports = {

@@ -125,24 +125,24 @@ function readOllamaSettings() {
 async function testOllama(url, contextLength) {
     const root = normalizeOllamaUrl(url);
     if (!root) {
-        return { ok: false, message: 'Informe o endereço do servidor (ex.: http://localhost:11434).' };
+        return { ok: false, message: 'Enter the server address (e.g. http://localhost:11434).' };
     }
     let models;
     try {
         models = await fetchOllamaModels(root, { contextLength });
     } catch (error) {
-        const reason = error && error.name === 'TimeoutError' ? 'não respondeu a tempo' : 'não pôde ser alcançado';
-        return { ok: false, message: `O servidor ${root} ${reason}. Verifique se o Ollama está no ar e aceita conexões da rede (OLLAMA_HOST).` };
+        const reason = error && error.name === 'TimeoutError' ? 'did not respond in time' : 'could not be reached';
+        return { ok: false, message: `The server ${root} ${reason}. Check that Ollama is running and accepts network connections (OLLAMA_HOST).` };
     }
     if (models.length === 0) {
-        return { ok: false, message: `O Ollama em ${root} respondeu, mas não tem modelo de conversa instalado (ollama pull …).` };
+        return { ok: false, message: `Ollama at ${root} responded, but has no chat model installed (ollama pull …).` };
     }
     const semFerramenta = models.filter((m) => !m.toolCalling).map((m) => m.id);
-    let message = `Conectado. ${models.length} modelo(s): ${models.map((m) => m.id).join(', ')}.`;
+    let message = `Connected. ${models.length} model(s): ${models.map((m) => m.id).join(', ')}.`;
     if (semFerramenta.length) {
         // O chat depende de ferramentas para consultar o banco; um modelo sem
         // elas responde sem olhar o corpus. Melhor saber aqui do que na conversa.
-        message += ` Sem suporte a ferramentas (não consultam o banco): ${semFerramenta.join(', ')}.`;
+        message += ` Without tool support (they do not query the database): ${semFerramenta.join(', ')}.`;
     }
     return { ok: true, message };
 }
@@ -160,7 +160,7 @@ const PROVIDER_SPECS = [
     { id: 'gemini', label: 'Google Gemini', secret: 'synesis.apiKey.gemini', hint: 'AIza…' },
     {
         id: 'openrouter',
-        label: 'OpenRouter (inclui modelos gratuitos)',
+        label: 'OpenRouter (includes free models)',
         secret: 'synesis.apiKey.openrouter',
         hint: 'sk-or-v1-…'
     }
@@ -199,7 +199,7 @@ async function openSettingsPanel(context, { onChanged } = {}) {
         return currentPanel;
     }
 
-    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, 'Synesis: Configuração', vscode.ViewColumn.One, {
+    const panel = vscode.window.createWebviewPanel(VIEW_TYPE, 'Synesis: Settings', vscode.ViewColumn.One, {
         enableScripts: true,
         // Sem isso o formulário meio preenchido se perde ao trocar de aba, que é
         // justamente quando o pesquisador vai buscar a credencial em outro lugar.
@@ -218,7 +218,7 @@ async function openSettingsPanel(context, { onChanged } = {}) {
         } catch (error) {
             panel.webview.postMessage({
                 type: 'error',
-                message: `Falha inesperada: ${error && error.message ? error.message : error}`
+                message: `Unexpected failure: ${error && error.message ? error.message : error}`
             });
         }
     });
@@ -260,7 +260,7 @@ async function handleMessage(context, panel, message, onChanged) {
             if (typeof onChanged === 'function') {
                 onChanged();
             }
-            return post({ toast: `Conexão "${saved.name}" salva.` });
+            return post({ toast: `Connection "${saved.name}" saved.` });
         }
 
         case 'deleteProfile': {
@@ -268,7 +268,7 @@ async function handleMessage(context, panel, message, onChanged) {
             if (typeof onChanged === 'function') {
                 onChanged();
             }
-            return post({ toast: 'Conexão removida.' });
+            return post({ toast: 'Connection removed.' });
         }
 
         case 'activateProfile': {
@@ -286,7 +286,7 @@ async function handleMessage(context, panel, message, onChanged) {
                     type: 'testResult',
                     profileId: message.profileId,
                     ok: false,
-                    message: 'Salve a conexão antes de testá-la.'
+                    message: 'Save the connection before testing it.'
                 });
             }
             const password = await context.secrets.get(secretKey(profile.id));
@@ -307,10 +307,10 @@ async function handleMessage(context, panel, message, onChanged) {
             }
             if (message.key) {
                 await context.secrets.store(spec.secret, message.key);
-                return post({ toast: `API key da ${spec.label} salva.` });
+                return post({ toast: `${spec.label} API key saved.` });
             }
             await context.secrets.delete(spec.secret);
-            return post({ toast: `API key da ${spec.label} removida.` });
+            return post({ toast: `${spec.label} API key removed.` });
         }
 
         case 'saveOpenRouterModels': {
@@ -323,8 +323,8 @@ async function handleMessage(context, panel, message, onChanged) {
             await writeOpenRouterModels(unique);
             return post({
                 toast: unique.length
-                    ? `${unique.length} modelo(s) do OpenRouter no seletor.`
-                    : 'Lista limpa — voltam os modelos padrão do OpenRouter.'
+                    ? `${unique.length} OpenRouter model(s) in the picker.`
+                    : 'List cleared — the default OpenRouter models are back.'
             });
         }
 
@@ -341,7 +341,7 @@ async function handleMessage(context, panel, message, onChanged) {
             if (typeof message.stream === 'boolean') {
                 await config.update('ollama.stream', message.stream, vscode.ConfigurationTarget.Global);
             }
-            return post({ toast: url ? `Ollama em ${url} salvo.` : 'Ollama desligado.' });
+            return post({ toast: url ? `Ollama at ${url} saved.` : 'Ollama turned off.' });
         }
 
         case 'testOllama': {
@@ -354,7 +354,7 @@ async function handleMessage(context, panel, message, onChanged) {
                 canSelectFolders: true,
                 canSelectFiles: false,
                 canSelectMany: false,
-                openLabel: 'Usar esta pasta'
+                openLabel: 'Use this folder'
             });
             if (picked && picked[0]) {
                 panel.webview.postMessage({
@@ -384,7 +384,7 @@ async function handleMessage(context, panel, message, onChanged) {
 async function testConnection(profile) {
     const spec = backendSpec(profile.backend);
     if (!spec) {
-        return { ok: false, message: 'Tipo de banco desconhecido.' };
+        return { ok: false, message: 'Unknown database type.' };
     }
 
     if (spec.transport === 'http') {
@@ -396,8 +396,8 @@ async function testConnection(profile) {
     return {
         ok: false,
         message:
-            'O teste de conexão do Neo4j ainda não está disponível nesta versão — ' +
-            'a credencial foi salva e será usada assim que o suporte a Bolt entrar.'
+            'The Neo4j connection test is not available in this version yet — ' +
+            'the credential was saved and will be used as soon as Bolt support arrives.'
     };
 }
 
@@ -422,21 +422,21 @@ async function testArcadeDbHttp(profile) {
     } catch (error) {
         // Distinguir "não alcancei" de "recusou" é o que evita mandar o
         // pesquisador reconfigurar credencial quando o servidor está fora do ar.
-        const reason = error && error.name === 'TimeoutError' ? 'não respondeu a tempo' : 'não pôde ser alcançado';
+        const reason = error && error.name === 'TimeoutError' ? 'did not respond in time' : 'could not be reached';
         return {
             ok: false,
-            message: `O servidor ${base} ${reason}. Verifique se o ArcadeDB está no ar e se o endereço está correto.`
+            message: `The server ${base} ${reason}. Check that ArcadeDB is running and the address is correct.`
         };
     }
 
     if (response.status === 401 || response.status === 403) {
         return {
             ok: false,
-            message: `O servidor respondeu, mas recusou as credenciais de "${profile.user}". Confira usuário e senha.`
+            message: `The server responded, but rejected the credentials of "${profile.user}". Check user and password.`
         };
     }
     if (!response.ok) {
-        return { ok: false, message: `O servidor respondeu com HTTP ${response.status}.` };
+        return { ok: false, message: `The server responded with HTTP ${response.status}.` };
     }
 
     let databases = [];
@@ -455,7 +455,7 @@ async function testArcadeDbHttp(profile) {
     return {
         ok: true,
         message: databases.length
-            ? `Conectado. ${databases.length} banco(s) disponível(is).`
+            ? `Connected. ${databases.length} database(s) available.`
             : 'Conectado e autenticado.',
         databases
     };
@@ -465,7 +465,7 @@ async function testArcadeDbHttp(profile) {
 async function testArcadeDbEmbedded(profile) {
     const root = String(profile.dbPath || '').trim();
     if (!root) {
-        return { ok: false, message: 'Informe a pasta raiz do servidor.' };
+        return { ok: false, message: 'Enter the server root folder.' };
     }
 
     const databasesUri = vscode.Uri.joinPath(vscode.Uri.file(root), 'databases');
@@ -478,8 +478,8 @@ async function testArcadeDbEmbedded(profile) {
         return {
             ok: false,
             message:
-                `Não encontrei "${root}/databases". Este campo é a pasta RAIZ do servidor — ` +
-                'a que contém `databases/`, não a pasta do banco em si.'
+                `"${root}/databases" was not found. This field is the server ROOT folder — ` +
+                'the one that contains `databases/`, not the database folder itself.'
         };
     }
 
@@ -488,9 +488,9 @@ async function testArcadeDbEmbedded(profile) {
         .map(([name]) => name);
 
     if (databases.length === 0) {
-        return { ok: false, message: `A pasta "${root}/databases" existe, mas está vazia.` };
+        return { ok: false, message: `The folder "${root}/databases" exists, but is empty.` };
     }
-    return { ok: true, message: `${databases.length} banco(s) encontrado(s).`, databases };
+    return { ok: true, message: `${databases.length} database(s) found.`, databases };
 }
 
 /** Nonce da CSP: o script inline só executa se casar com o cabeçalho. */
@@ -511,7 +511,7 @@ function renderHtml(webview) {
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src ${webview.cspSource} 'unsafe-inline'; script-src 'nonce-${nonce}';">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Synesis: Configuração</title>
+<title>Synesis: Settings</title>
 <style>
   :root { color-scheme: light dark; }
   body {
@@ -593,50 +593,50 @@ function renderHtml(webview) {
 </style>
 </head>
 <body>
-  <h1>Configuração do Synesis</h1>
+  <h1>Synesis settings</h1>
   <p class="lead">
-    O chat <code>@synesis</code> combina <strong>duas coisas independentes</strong>. Configure as duas.
+    The <code>@synesis</code> chat combines <strong>two independent things</strong>. Configure both.
   </p>
 
   <div class="split">
     <div class="split-item">
       <div class="split-icon">🗄️</div>
       <div>
-        <strong>1. Banco de grafos</strong>
-        <p class="hint">Onde <em>o seu corpus</em> está — o grafo gerado pelo <code>synesis-graph</code>.
-        É de lá que saem os trechos e as referências que sustentam cada resposta.</p>
+        <strong>1. Graph database</strong>
+        <p class="hint">Where <em>your corpus</em> is — the graph generated by <code>synesis-graph</code>.
+        That is where the excerpts and references supporting each answer come from.</p>
       </div>
     </div>
     <div class="split-item">
       <div class="split-icon">🤖</div>
       <div>
         <strong>2. Provedor de IA</strong>
-        <p class="hint">Qual modelo <em>lê e redige</em>. Não guarda o seu corpus e não substitui o banco:
-        sem uma conexão de grafo, o chat se recusa a responder sobre os dados.</p>
+        <p class="hint">Which model <em>reads and writes</em>. It does not hold your corpus and does not replace the database:
+        without a graph connection, the chat refuses to answer about the data.</p>
       </div>
     </div>
   </div>
 
-  <h2>🗄️ Bancos de grafos <span class="section-tag">o seu corpus</span></h2>
+  <h2>🗄️ Graph databases <span class="section-tag">your corpus</span></h2>
   <p class="lead">
-    Cadastre quantos quiser — local, remoto, de projetos diferentes — e marque qual vale neste projeto.
-    Suporta <strong>ArcadeDB</strong> (servidor ou embutido) e <strong>Neo4j</strong> (local ou AuraDB).
+    Register as many as you like — local, remote, from different projects — and mark which one this project uses.
+    Supports <strong>ArcadeDB</strong> (server or embedded) and <strong>Neo4j</strong> (local or AuraDB).
   </p>
   <div id="profiles"></div>
-  <div class="actions"><button id="add">Nova conexão de banco</button></div>
+  <div class="actions"><button id="add">New database connection</button></div>
 
-  <h2>🤖 Provedores de IA <span class="section-tag">o modelo que conversa</span></h2>
+  <h2>🤖 AI providers <span class="section-tag">the model that chats</span></h2>
   <p class="lead">
-    Cada provedor só aparece no seletor de modelo da caixa de chat depois que a chave é salva
-    (o Ollama, depois que o endereço é salvo). Você escolhe o modelo ali, a cada conversa.
+    Each provider only shows up in the chat model picker after its key is saved
+    (Ollama, after its address is saved). You choose the model there, for each conversation.
   </p>
   <div id="providers"></div>
 
   <div class="note">
-    Senhas de banco e chaves de API ficam no <strong>cofre criptografado do sistema operacional</strong>,
-    nunca em <code>settings.json</code> — que é texto puro, sincroniza entre máquinas e é legível por outras
-    extensões. Por isso os campos aparecem em branco com o rótulo “configurada”: o valor guardado nunca é
-    devolvido à tela.
+    Database passwords and API keys are kept in the <strong>operating system's encrypted vault</strong>,
+    never in <code>settings.json</code> — which is plain text, syncs across machines and is readable by other
+    extensions. That is why the fields show up blank with the label “set”: the stored value is never
+    sent back to the screen.
   </div>
 
 <script nonce="${nonce}">
@@ -669,13 +669,13 @@ function renderHtml(webview) {
     const backend = backendById(profile.backend);
     const form = el('div');
 
-    form.appendChild(el('label', { text: 'Nome desta conexão', for: 'f-name' }));
+    form.appendChild(el('label', { text: 'Name of this connection', for: 'f-name' }));
     form.appendChild(el('input', {
-      id: 'f-name', value: profile.name || '', placeholder: 'ex.: face85 local'
+      id: 'f-name', value: profile.name || '', placeholder: 'e.g. face85 local'
     }));
     if (errors.name) form.appendChild(el('p', { class: 'error', text: errors.name }));
 
-    form.appendChild(el('label', { text: 'Tipo de banco', for: 'f-backend' }));
+    form.appendChild(el('label', { text: 'Database type', for: 'f-backend' }));
     const select = el('select', { id: 'f-backend' });
     state.backends.forEach((b) => {
       const opt = el('option', { value: b.id, text: b.label });
@@ -704,11 +704,11 @@ function renderHtml(webview) {
         id,
         type: field.secret ? 'password' : 'text',
         value: field.secret ? '' : (profile[field.name] || field.default || ''),
-        placeholder: stored ? 'configurada — digite para substituir' : (field.placeholder || '')
+        placeholder: stored ? 'set — type to replace' : (field.placeholder || '')
       });
 
       if (field.name === 'dbPath') {
-        const browse = el('button', { class: 'secondary', text: 'Procurar…',
+        const browse = el('button', { class: 'secondary', text: 'Browse…',
           onclick: () => vscode.postMessage({ type: 'pickFolder', field: id }) });
         form.appendChild(el('div', { class: 'row' }, [input, browse]));
       } else if (field.name === 'database') {
@@ -722,7 +722,7 @@ function renderHtml(webview) {
           input.setAttribute('list', 'dl-' + field.name);
           form.appendChild(el('div', {}, [input, list]));
           form.appendChild(el('p', { class: 'hint',
-            text: 'Disponíveis: ' + found.join(', ') }));
+            text: 'Available: ' + found.join(', ') }));
         } else {
           form.appendChild(input);
         }
@@ -735,21 +735,21 @@ function renderHtml(webview) {
     });
 
     const actions = el('div', { class: 'actions' });
-    actions.appendChild(el('button', { text: 'Salvar', onclick: () => save(profile) }));
+    actions.appendChild(el('button', { text: 'Save', onclick: () => save(profile) }));
     if (!isNew) {
       actions.appendChild(el('button', {
-        class: 'secondary', text: 'Testar conexão',
+        class: 'secondary', text: 'Test connection',
         onclick: () => { results[profile.id] = { pending: true }; render();
                          vscode.postMessage({ type: 'testProfile', profileId: profile.id }); }
       }));
     }
     actions.appendChild(el('button', {
-      class: 'secondary', text: 'Cancelar',
+      class: 'secondary', text: 'Cancel',
       onclick: () => { editing = null; editingDraft = null; errors = {}; render(); }
     }));
     if (!isNew) {
       actions.appendChild(el('button', {
-        class: 'danger', text: 'Remover',
+        class: 'danger', text: 'Remove',
         onclick: () => { editing = null; editingDraft = null;
                          vscode.postMessage({ type: 'deleteProfile', profileId: profile.id }); }
       }));
@@ -760,7 +760,7 @@ function renderHtml(webview) {
     if (result) {
       form.appendChild(el('div', {
         class: 'result ' + (result.pending ? '' : result.ok ? 'ok' : 'fail'),
-        text: result.pending ? 'Testando…' : result.message
+        text: result.pending ? 'Testing…' : result.message
       }));
     }
     return form;
@@ -800,36 +800,36 @@ function renderHtml(webview) {
     if (editing === '__new__') {
       const draft = editingDraft || { name: '', backend: state.backends[0] && state.backends[0].id };
       root.appendChild(el('div', { class: 'card' }, [
-        el('div', { class: 'card-head' }, [el('span', { class: 'card-title', text: 'Nova conexão' })]),
+        el('div', { class: 'card-head' }, [el('span', { class: 'card-title', text: 'New connection' })]),
         renderForm(draft)
       ]));
     }
 
     if (state.profiles.length === 0 && editing !== '__new__') {
-      root.appendChild(el('p', { class: 'empty', text: 'Nenhuma conexão configurada ainda.' }));
+      root.appendChild(el('p', { class: 'empty', text: 'No connection configured yet.' }));
     }
 
     state.profiles.forEach((profile) => {
       const isActive = profile.id === state.activeId;
       const card = el('div', { class: 'card' + (isActive ? ' active' : '') });
       const head = el('div', { class: 'card-head' }, [
-        el('span', { class: 'card-title', text: profile.name || '(sem nome)' })
+        el('span', { class: 'card-title', text: profile.name || '(unnamed)' })
       ]);
       const backend = backendById(profile.backend);
       head.appendChild(el('span', { class: 'badge', text: backend ? backend.label : profile.backend }));
-      if (isActive) head.appendChild(el('span', { class: 'badge ok', text: 'ativa neste projeto' }));
-      if (profile.gap) head.appendChild(el('span', { class: 'badge warn', text: 'incompleta' }));
+      if (isActive) head.appendChild(el('span', { class: 'badge ok', text: 'active in this project' }));
+      if (profile.gap) head.appendChild(el('span', { class: 'badge warn', text: 'incomplete' }));
       head.appendChild(el('span', { class: 'spacer' }));
 
       if (editing !== profile.id) {
         if (!isActive) {
           head.appendChild(el('button', {
-            class: 'secondary', text: 'Usar neste projeto',
+            class: 'secondary', text: 'Use in this project',
             onclick: () => vscode.postMessage({ type: 'activateProfile', profileId: profile.id })
           }));
         }
         head.appendChild(el('button', {
-          class: 'secondary', text: 'Editar',
+          class: 'secondary', text: 'Edit',
           onclick: () => { editing = profile.id; editingDraft = null; errors = {}; render(); }
         }));
       }
@@ -842,7 +842,7 @@ function renderHtml(webview) {
       } else {
         const summary = profile.uri || profile.dbPath || '';
         if (summary) card.appendChild(el('p', { class: 'hint', text: summary +
-          (profile.database ? '  ·  banco: ' + profile.database : '') }));
+          (profile.database ? '  ·  database: ' + profile.database : '') }));
         const result = results[profile.id];
         if (result && !result.pending) {
           card.appendChild(el('div', { class: 'result ' + (result.ok ? 'ok' : 'fail'), text: result.message }));
@@ -862,15 +862,15 @@ function renderHtml(webview) {
       ]);
       head.appendChild(el('span', {
         class: 'badge ' + (provider.hasKey ? 'ok' : ''),
-        text: provider.hasKey ? 'configurada' : 'não configurada'
+        text: provider.hasKey ? 'set' : 'not set'
       }));
       card.appendChild(head);
 
       const input = el('input', {
         id: 'k-' + provider.id, type: 'password',
-        placeholder: provider.hasKey ? 'configurada — digite para substituir' : provider.hint
+        placeholder: provider.hasKey ? 'set — type to replace' : provider.hint
       });
-      const saveBtn = el('button', { text: 'Salvar', onclick: () => {
+      const saveBtn = el('button', { text: 'Save', onclick: () => {
         vscode.postMessage({ type: 'saveApiKey', providerId: provider.id, key: input.value });
         input.value = '';
       }});
@@ -878,7 +878,7 @@ function renderHtml(webview) {
 
       if (provider.hasKey) {
         card.appendChild(el('div', { class: 'actions' }, [
-          el('button', { class: 'danger', text: 'Remover chave', onclick: () =>
+          el('button', { class: 'danger', text: 'Remove key', onclick: () =>
             vscode.postMessage({ type: 'saveApiKey', providerId: provider.id, key: '' }) })
         ]));
       }
@@ -890,10 +890,10 @@ function renderHtml(webview) {
       // caixas de diálogo, porque cadastrar três modelos por popup encadeado é
       // exatamente o atrito que este painel existe para eliminar.
       if (provider.models) {
-        card.appendChild(el('div', { class: 'sub-label', text: 'Modelos no seletor de chat' }));
+        card.appendChild(el('div', { class: 'sub-label', text: 'Models in the chat picker' }));
         card.appendChild(el('p', { class: 'hint', text:
-          'Um id por linha (ex.: liquid/lfm-2.5-2.6b:free). Nome, janela de contexto e ' +
-          'suporte a ferramentas vêm do catálogo do OpenRouter. Em branco, valem os modelos padrão.' }));
+          'One id per line (e.g. liquid/lfm-2.5-2.6b:free). Name, context window and ' +
+          'tool support come from the OpenRouter catalog. Blank means the default models.' }));
 
         const box = el('textarea', {
           id: 'or-models',
@@ -908,7 +908,7 @@ function renderHtml(webview) {
         box.textContent = provider.models.join('\\n');
         card.appendChild(box);
         card.appendChild(el('div', { class: 'actions' }, [
-          el('button', { text: 'Salvar modelos', onclick: () =>
+          el('button', { text: 'Save models', onclick: () =>
             vscode.postMessage({
               type: 'saveOpenRouterModels',
               models: box.value.split('\\n')
@@ -925,38 +925,38 @@ function renderHtml(webview) {
   function renderOllama(ollama) {
     const card = el('div', { class: 'card' });
     const head = el('div', { class: 'card-head' }, [
-      el('span', { class: 'card-title', text: 'Ollama (modelos locais)' })
+      el('span', { class: 'card-title', text: 'Ollama (local models)' })
     ]);
     head.appendChild(el('span', {
       class: 'badge ' + (ollama.url ? 'ok' : ''),
-      text: ollama.url ? 'ligado' : 'desligado'
+      text: ollama.url ? 'on' : 'off'
     }));
     card.appendChild(head);
     card.appendChild(el('p', { class: 'hint', text:
-      'Sem API key: os modelos instalados no servidor aparecem no seletor de chat. ' +
-      'Em branco, o provedor fica desligado.' }));
+      'No API key: the models installed on the server show up in the chat picker. ' +
+      'Blank turns the provider off.' }));
 
-    card.appendChild(el('label', { text: 'Endereço do servidor', for: 'ol-url' }));
+    card.appendChild(el('label', { text: 'Server address', for: 'ol-url' }));
     const url = el('input', { id: 'ol-url', value: ollama.url || '',
       placeholder: 'http://localhost:11434' });
     card.appendChild(url);
 
-    card.appendChild(el('label', { text: 'Janela de contexto (tokens)', for: 'ol-ctx' }));
+    card.appendChild(el('label', { text: 'Context window (tokens)', for: 'ol-ctx' }));
     const ctx = el('input', { id: 'ol-ctx', type: 'number', min: '2048', step: '1024',
       value: String(ollama.contextLength || '') });
     card.appendChild(ctx);
     card.appendChild(el('p', { class: 'hint', text:
-      'Pedida ao Ollama em cada conversa (num_ctx), limitada ao máximo do modelo. ' +
-      'Sem ela o Ollama usa um padrão pequeno e corta o prompt em silêncio. Mais contexto exige mais VRAM.' }));
+      'Requested from Ollama in each conversation (num_ctx), capped at the model maximum. ' +
+      'Without it Ollama uses a small default and silently cuts the prompt. More context needs more VRAM.' }));
 
-    card.appendChild(el('label', { text: 'Raciocínio (think)', for: 'ol-think' }));
+    card.appendChild(el('label', { text: 'Reasoning (think)', for: 'ol-think' }));
     const think = el('select', { id: 'ol-think' });
     [
-      ['default', 'Padrão do modelo (não envia)'],
-      ['off', 'Desligado'],
-      ['low', 'Baixo'],
-      ['medium', 'Médio'],
-      ['high', 'Alto']
+      ['default', 'Model default (not sent)'],
+      ['off', 'Off'],
+      ['low', 'Low'],
+      ['medium', 'Medium'],
+      ['high', 'High']
     ].forEach(([value, label]) => {
       const opt = el('option', { value, text: label });
       if (value === ollama.think) opt.selected = true;
@@ -964,24 +964,24 @@ function renderHtml(webview) {
     });
     card.appendChild(think);
     card.appendChild(el('p', { class: 'hint', text:
-      'O modelo pensa a cada consulta ao banco, inclusive nas que só escolhem a próxima — é o maior custo de tempo. ' +
-      'Níveis valem no gpt-oss (que não desliga: "Desligado" vira "Baixo"); nos demais, qualquer nível liga. ' +
-      'Modelos que não pensam ignoram esta opção.' }));
+      'The model thinks at every database query, including those that only pick the next one — it is the largest time cost. ' +
+      'Levels apply to gpt-oss (which cannot turn it off: "Off" becomes "Low"); on the others, any level turns it on. ' +
+      'Models that do not think ignore this option.' }));
 
     const stream = el('input', { id: 'ol-stream', type: 'checkbox' });
     stream.checked = ollama.stream !== false;
     card.appendChild(el('label', { class: 'check', for: 'ol-stream' }, [
-      stream, document.createTextNode('Receber a resposta em pedaços (streaming)')
+      stream, document.createTextNode('Receive the answer in chunks (streaming)')
     ]));
     card.appendChild(el('p', { class: 'hint', text:
-      'Evita que uma rodada longa de modelo local estoure o prazo de 5 minutos da conexão e permite cancelar no meio. ' +
-      'O texto ainda aparece ao fim de cada rodada.' }));
+      'Keeps a long local-model round from hitting the 5-minute connection timeout and lets you cancel midway. ' +
+      'The text still appears at the end of each round.' }));
 
     card.appendChild(el('div', { class: 'actions' }, [
-      el('button', { text: 'Salvar', onclick: () =>
+      el('button', { text: 'Save', onclick: () =>
         vscode.postMessage({ type: 'saveOllama', url: url.value, contextLength: ctx.value,
           think: think.value, stream: stream.checked }) }),
-      el('button', { class: 'secondary', text: 'Testar', onclick: () => {
+      el('button', { class: 'secondary', text: 'Test', onclick: () => {
         ollamaResult = { pending: true }; render();
         vscode.postMessage({ type: 'testOllama', url: url.value, contextLength: ctx.value });
       }})
@@ -989,7 +989,7 @@ function renderHtml(webview) {
     if (ollamaResult) {
       card.appendChild(el('div', {
         class: 'result ' + (ollamaResult.pending ? '' : ollamaResult.ok ? 'ok' : 'fail'),
-        text: ollamaResult.pending ? 'Testando…' : ollamaResult.message
+        text: ollamaResult.pending ? 'Testing…' : ollamaResult.message
       }));
     }
     return card;
@@ -1002,14 +1002,14 @@ function renderHtml(webview) {
    * mensagem que nomeia a causa.
    */
   function render() {
-    try { renderProfiles(); } catch (e) { showRenderError('perfis', e); }
-    try { renderProviders(); } catch (e) { showRenderError('provedores', e); }
+    try { renderProfiles(); } catch (e) { showRenderError('profiles', e); }
+    try { renderProviders(); } catch (e) { showRenderError('providers', e); }
   }
 
   function showRenderError(secao, err) {
     const root = document.getElementById(secao === 'perfis' ? 'profiles' : 'providers');
     const box = el('div', { class: 'card' });
-    box.appendChild(el('div', { class: 'card-title', text: 'Falha ao desenhar ' + secao }));
+    box.appendChild(el('div', { class: 'card-title', text: 'Failed to render ' + secao }));
     box.appendChild(el('p', { class: 'hint', text: String((err && err.message) || err) }));
     root.appendChild(box);
   }

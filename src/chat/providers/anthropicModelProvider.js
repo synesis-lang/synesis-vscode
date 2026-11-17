@@ -90,7 +90,7 @@ class AnthropicModelProvider {
                 }
             } catch (error) {
                 console.warn(
-                    'Synesis Chat: catálogo Anthropic indisponível, usando a lista fixa.',
+                    'Synesis Chat: Anthropic catalog unavailable, using the fixed list.',
                     error && error.message
                 );
             }
@@ -110,7 +110,7 @@ class AnthropicModelProvider {
     async provideLanguageModelChatResponse(model, messages, options, progress, token) {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
-            throw new Error('Synesis Chat: configure a API key da Anthropic (comando "Synesis: Configuração").');
+            throw new Error('Synesis Chat: set the Anthropic API key (command "Synesis: Settings").');
         }
 
         const body = {

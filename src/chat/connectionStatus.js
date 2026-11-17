@@ -88,39 +88,39 @@ function describeNextStep(status) {
     // (`gap`), em vez de mandar refazer tudo.
     if (status.gap) {
         return {
-            message: `${status.gap} Abra a página de configuração para completá-la.`,
+            message: `${status.gap} Open the settings page to complete it.`,
             command: 'synesis.openSettings',
-            title: 'Abrir configuração'
+            title: 'Open settings'
         };
     }
 
     if (status.hasProfiles) {
         return {
             message:
-                'Há conexões cadastradas, mas nenhuma está marcada como ativa neste projeto. ' +
-                'Escolha qual banco este projeto consulta.',
+                'There are registered connections, but none is marked as active in this project. ' +
+                'Choose which database this project queries.',
             command: 'synesis.openSettings',
-            title: 'Escolher conexão'
+            title: 'Choose connection'
         };
     }
 
     if (!status.hasCredentials) {
         return {
             message:
-                'Nenhuma conexão com o banco foi configurada ainda. ' +
-                'A página de configuração reúne servidor, usuário, senha e o banco numa tela só.',
+                'No database connection has been configured yet. ' +
+                'The settings page gathers server, user, password and database in a single screen.',
             command: 'synesis.openSettings',
-            title: 'Abrir configuração'
+            title: 'Open settings'
         };
     }
 
     if (!status.hasWorkspace) {
         return {
             message:
-                `A credencial para **${status.uri}** está salva, mas nenhuma pasta está aberta — ` +
-                'o VSCode só carrega servidores MCP de um workspace aberto. Abra a pasta do projeto.',
+                `The credential for **${status.uri}** is saved, but no folder is open — ` +
+                'VSCode only loads MCP servers from an open workspace. Open the project folder.',
             command: 'vscode.openFolder',
-            title: 'Abrir pasta'
+            title: 'Open folder'
         };
     }
 
@@ -131,13 +131,13 @@ function describeNextStep(status) {
     // em vez de mandar refazer o formulário no escuro.
     return {
         message:
-            `A conexão para **${status.uri}** (usuário \`${status.user}\`) está salva, mas o servidor ` +
-            'não respondeu.\n\n' +
-            'A causa provável não é a configuração: o servidor pode estar fora do ar ou ' +
-            'inacessível a partir desta máquina. Use **Testar conexão** na página de ' +
-            'configuração para ver o motivo exato.',
+            `The connection to **${status.uri}** (user \`${status.user}\`) is saved, but the server ` +
+            'did not respond.\n\n' +
+            'The likely cause is not the configuration: the server may be down or ' +
+            'unreachable from this machine. Use **Test connection** on the ' +
+            'settings page to see the exact reason.',
         command: 'synesis.openSettings',
-        title: 'Testar conexão'
+        title: 'Test connection'
     };
 }
 

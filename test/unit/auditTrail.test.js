@@ -11,6 +11,7 @@
  */
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const {
     groupByOrigin,
     renderAuditTrail,
@@ -89,17 +90,17 @@ describe('Trilha — renderização', () => {
         const text = renderAuditTrail(groupByOrigin([ASHWORTH]));
 
         assert.ok(text.includes('social_acceptance.syn'));
-        assert.ok(text.includes('linha 8'));
+        assert.ok(text.includes('line 8'));
     });
 
     it('informa quantas relações saíram do mesmo trecho', () => {
         const records = [1, 2, 3].map((n) => ({ ...ASHWORTH, item_id: `id_${n}` }));
-        assert.match(renderAuditTrail(groupByOrigin(records)), /3 relações/);
+        assert.match(renderAuditTrail(groupByOrigin(records)), /3 relations/);
     });
 
     it('não diz "1 relação" quando há apenas uma', () => {
         // Ruído: a entrada única já é a informação.
-        assert.ok(!/1 relaç/.test(renderAuditTrail(groupByOrigin([ASHWORTH]))));
+        assert.ok(!/1 relation/.test(renderAuditTrail(groupByOrigin([ASHWORTH]))));
     });
 
     it('explica a ausência em vez de mostrar trilha vazia', () => {
@@ -108,18 +109,21 @@ describe('Trilha — renderização', () => {
         const text = renderAuditTrail([]);
 
         assert.match(text, /template/i);
-        assert.match(text, /estrutura do grafo/i);
+        assert.match(text, /graph structure/i);
     });
 
     it('lembra que o trecho foi anotado pelo pesquisador', () => {
         // A diferença para um RAG genérico: a origem é dado, não recuperação
         // por similaridade.
-        assert.match(renderAuditTrail(groupByOrigin([ASHWORTH])), /anotado pelo pesquisador/i);
+        assert.match(renderAuditTrail(groupByOrigin([ASHWORTH])), /annotated by the researcher/i);
     });
 });
 
 describe('Trilha — prompt de auditoria', () => {
-    const prompt = buildAuditPrompt('Que trechos falam de X?', 'Resposta anterior citando Y.');
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
+    const prompt = withPromptLanguage('pt', () => buildAuditPrompt('Que trechos falam de X?', 'Resposta anterior citando Y.'));
 
     it('carrega a pergunta e a resposta do turno', () => {
         assert.ok(prompt.includes('Que trechos falam de X?'));
@@ -210,8 +214,8 @@ describe('Trilha — relatório determinístico do turno', () => {
         // O prefetch custa consulta real e ficava fora de qualquer
         // contabilidade; marcá-lo mantém o custo honesto.
         const text = renderTurnReport(trace);
-        assert.match(text, /extensão/);
-        assert.match(text, /modelo, rodada 1/);
+        assert.match(text, /extension/);
+        assert.match(text, /model, round 1/);
     });
 
     it('conta as linhas retornadas, distinguindo vazio de não consultado', () => {
@@ -227,8 +231,8 @@ describe('Trilha — relatório determinístico do turno', () => {
                 }
             ]
         };
-        assert.match(renderTurnReport(empty), /Sem resultados/i);
-        assert.match(renderTurnReport(trace), /1 linha\(s\) retornada\(s\)/);
+        assert.match(renderTurnReport(empty), /No results/i);
+        assert.match(renderTurnReport(trace), /1 row\(s\) returned/);
     });
 
     it('mostra a falha da ferramenta em vez de escondê-la', () => {
@@ -240,16 +244,16 @@ describe('Trilha — relatório determinístico do turno', () => {
     });
 
     it('avisa quando o teto de rodadas cortou o turno', () => {
-        assert.match(renderTurnReport({ ...trace, incomplete: true }), /incompleto/i);
+        assert.match(renderTurnReport({ ...trace, incomplete: true }), /incomplete/i);
     });
 
     it('degrada com aviso quando o trace saiu do store', () => {
-        assert.match(renderTurnReport(undefined), /não há registro/i);
+        assert.match(renderTurnReport(undefined), /no record/i);
     });
 
     it('não inventa consulta quando não houve nenhuma', () => {
         const text = renderTurnReport({ ...trace, toolCalls: [] });
-        assert.match(text, /Nenhuma consulta/i);
+        assert.match(text, /No query/i);
     });
 });
 
@@ -263,20 +267,20 @@ describe('Trilha — raciocínio intermediário separado da resposta', () => {
             intermediateText: [{ round: 1, text: 'Vou verificar quantos itens existem.' }]
         });
 
-        assert.match(text, /Raciocínio entre consultas/i);
+        assert.match(text, /Reasoning between queries/i);
         assert.match(text, /Vou verificar quantos itens existem/);
-        assert.match(text, /não foi verificado/i);
+        assert.match(text, /was not verified/i);
     });
 
     it('omite a seção quando não houve raciocínio intermediário', () => {
         const text = renderTurnReport({
             turnId: 't', question: 'q', modelRequests: 1, toolCalls: [], intermediateText: []
         });
-        assert.ok(!/Raciocínio entre consultas/i.test(text));
+        assert.ok(!/Reasoning between queries/i.test(text));
     });
 
     it('tolera trace antigo, sem o campo', () => {
         const text = renderTurnReport({ turnId: 't', question: 'q', modelRequests: 1, toolCalls: [] });
-        assert.ok(!/Raciocínio entre consultas/i.test(text));
+        assert.ok(!/Reasoning between queries/i.test(text));
     });
 });

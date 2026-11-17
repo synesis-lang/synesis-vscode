@@ -1,3 +1,4 @@
+const { pick } = require('./promptLanguage');
 /**
  * lexicalCapability.js — busca por palavra, quando o grafo declara ter o índice.
  *
@@ -59,15 +60,20 @@ function renderLexicalCapability(context) {
     const itemIndex = indexName('Item', itemFields);
     const sourceIndex = indexName('Source', sourceFields);
 
-    const lines = ['Busca lexical (full-text) disponível neste banco:'];
+    const lines = [
+        pick({
+            en: 'Lexical (full-text) search available in this database:',
+            pt: 'Busca lexical (full-text) disponível neste banco:'
+        })
+    ];
     if (conceptIndex) {
-        lines.push(`- conceitos: \`${conceptIndex}\``);
+        lines.push(`- ${pick({ en: 'concepts', pt: 'conceitos' })}: \`${conceptIndex}\``);
     }
     if (itemIndex) {
-        lines.push(`- trechos: \`${itemIndex}\``);
+        lines.push(`- ${pick({ en: 'excerpts', pt: 'trechos' })}: \`${itemIndex}\``);
     }
     if (sourceIndex) {
-        lines.push(`- referências: \`${sourceIndex}\``);
+        lines.push(`- ${pick({ en: 'references', pt: 'referências' })}: \`${sourceIndex}\``);
     }
     if (analyzer) {
         lines.push(`- analyzer \`${analyzer}\``);
@@ -79,31 +85,52 @@ function renderLexicalCapability(context) {
     const seed = conceptIndex || itemIndex || sourceIndex;
     const seedType = conceptIndex ? label : itemIndex ? 'Item' : 'Source';
     lines.push(
-        '- A consulta é SQL (`language: "sql"`), e o índice é endereçado pelo nome exato ' +
-            'acima — um índice composto inclui todos os seus campos:'
+        pick({
+            en: '- The query is SQL (`language: "sql"`), and the index is addressed by the exact name ' +
+                'above — a composite index covers all of its fields:',
+            pt: '- A consulta é SQL (`language: "sql"`), e o índice é endereçado pelo nome exato ' +
+                'acima — um índice composto inclui todos os seus campos:'
+        })
     );
     lines.push('```sql');
-    lines.push(`SELECT name FROM ${seedType} WHERE SEARCH_INDEX('${seed}', 'termo') = true`);
+    lines.push(
+        `SELECT name FROM ${seedType} WHERE SEARCH_INDEX('${seed}', '${pick({ en: 'term', pt: 'termo' })}') = true`
+    );
     lines.push('```');
 
     if (foldsAccents(analyzer)) {
         lines.push(
-            '- **Este analyzer dobra acento e aplica stemming**: buscar `psicologicos` ' +
-                'encontra `psicológicos`, e `governanca` encontra `governança`. Use ' +
-                '`SEARCH_INDEX` quando o termo tiver acento ou puder variar de forma — ' +
-                'não corte o termo à mão.'
+            pick({
+                en: '- **This analyzer folds accents and applies stemming**: searching `psicologicos` ' +
+                    'finds `psicológicos`, and `governanca` finds `governança`. Use ' +
+                    '`SEARCH_INDEX` when the term has an accent or may vary in form — ' +
+                    'do not cut the term by hand.',
+                pt: '- **Este analyzer dobra acento e aplica stemming**: buscar `psicologicos` ' +
+                    'encontra `psicológicos`, e `governanca` encontra `governança`. Use ' +
+                    '`SEARCH_INDEX` quando o termo tiver acento ou puder variar de forma — ' +
+                    'não corte o termo à mão.'
+            })
         );
     } else {
         lines.push(
-            '- Este analyzer **não** dobra acento nem aplica stemming: `psicologicos` não ' +
-                'encontra `psicológicos`. Para termo acentuado, use o maior prefixo sem ' +
-                'diacrítico com `CONTAINS`.'
+            pick({
+                en: '- This analyzer does **not** fold accents nor apply stemming: `psicologicos` does not ' +
+                    'find `psicológicos`. For an accented term, use the longest prefix without a ' +
+                    'diacritic with `CONTAINS`.',
+                pt: '- Este analyzer **não** dobra acento nem aplica stemming: `psicologicos` não ' +
+                    'encontra `psicológicos`. Para termo acentuado, use o maior prefixo sem ' +
+                    'diacrítico com `CONTAINS`.'
+            })
         );
     }
 
     lines.push(
-        '- `CONTAINS` continua servindo para casar parte de um nome exato; `SEARCH_INDEX` ' +
-            'é busca por palavra sobre texto. São complementares.'
+        pick({
+            en: '- `CONTAINS` still serves to match part of an exact name; `SEARCH_INDEX` ' +
+                'is word search over text. They complement each other.',
+            pt: '- `CONTAINS` continua servindo para casar parte de um nome exato; `SEARCH_INDEX` ' +
+                'é busca por palavra sobre texto. São complementares.'
+        })
     );
 
     return lines.join('\n');

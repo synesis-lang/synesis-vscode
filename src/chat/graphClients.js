@@ -1,3 +1,4 @@
+const { pick } = require('./promptLanguage');
 /**
  * graphClients.js - Consulta ao grafo, um cliente por backend.
  *
@@ -88,21 +89,21 @@ class ArcadeDbHttpClient {
         } catch (error) {
             const reason =
                 error && error.name === 'TimeoutError'
-                    ? `não respondeu em ${Math.round(timeout / 1000)}s`
-                    : 'não pôde ser alcançado';
-            throw new GraphQueryError(`O servidor ${this.base} ${reason}.`, { kind: 'unreachable' });
+                    ? `did not respond within ${Math.round(timeout / 1000)}s`
+                    : 'could not be reached';
+            throw new GraphQueryError(`The server ${this.base} ${reason}.`, { kind: 'unreachable' });
         }
 
         if (response.status === 401 || response.status === 403) {
             // Mesma distinção que `describeAccessFailure` já fazia pelo texto:
             // sem permissão, re-exportar o projeto não resolve nada.
             throw new GraphQueryError(
-                `not authorized: o usuário "${this.user}" não tem acesso a este recurso.`,
+                `not authorized: the user "${this.user}" has no access to this resource.`,
                 { kind: 'forbidden' }
             );
         }
         if (response.status === 404) {
-            throw new GraphQueryError('does not exist: recurso não encontrado no servidor.', {
+            throw new GraphQueryError('does not exist: resource not found on the server.', {
                 kind: 'missing'
             });
         }
@@ -188,8 +189,8 @@ class Neo4jBoltClient {
             neo4j = require('neo4j-driver');
         } catch {
             throw new GraphQueryError(
-                'O suporte a Neo4j precisa do pacote `neo4j-driver`, que não está disponível nesta ' +
-                    'instalação da extensão. Reinstale a extensão a partir de um `.vsix` que o inclua.',
+                'Neo4j support needs the `neo4j-driver` package, which is not available in this ' +
+                    'installation of the extension. Reinstall the extension from a `.vsix` that includes it.',
                 { kind: 'missing-driver' }
             );
         }
@@ -287,7 +288,7 @@ class Neo4jBoltClient {
     async query(database, language, statement) {
         if (language && language !== 'cypher') {
             throw new GraphQueryError(
-                `O Neo4j só aceita Cypher; a consulta foi enviada como "${language}".`,
+                `Neo4j only accepts Cypher; the query was sent as "${language}".`,
                 { kind: 'error' }
             );
         }
@@ -361,10 +362,10 @@ function translateNeo4jError(error, uri, user) {
         });
     }
     if (/DatabaseNotFound|database does not exist/i.test(code + message)) {
-        return new GraphQueryError('does not exist: o banco não existe neste servidor.', { kind: 'missing' });
+        return new GraphQueryError('does not exist: the database does not exist on this server.', { kind: 'missing' });
     }
     if (/ServiceUnavailable|SessionExpired|ECONNREFUSED|ETIMEDOUT/i.test(code + message)) {
-        return new GraphQueryError(`O servidor ${uri} não pôde ser alcançado.`, { kind: 'unreachable' });
+        return new GraphQueryError(`The server ${uri} could not be reached.`, { kind: 'unreachable' });
     }
     return new GraphQueryError(message, { kind: 'error' });
 }
@@ -384,14 +385,14 @@ function translateNeo4jError(error, uri, user) {
 class ArcadeDbEmbeddedClient {
     constructor(profile) {
         this.dbPath = profile.dbPath;
-        this.label = `ArcadeDB embutido (${profile.dbPath})`;
+        this.label = `Embedded ArcadeDB (${profile.dbPath})`;
     }
 
     unsupported() {
         throw new GraphQueryError(
-            'O chat ainda não consulta o ArcadeDB no modo embutido: a engine embutida é Java e não ' +
-                'roda dentro do VSCode. Para conversar com este corpus, suba um servidor ArcadeDB ' +
-                'sobre a mesma pasta e cadastre uma conexão do tipo "ArcadeDB (servidor)".',
+            'The chat does not query ArcadeDB in embedded mode yet: the embedded engine is Java and does not ' +
+                'run inside VSCode. To chat with this corpus, start an ArcadeDB server ' +
+                'on the same folder and register a connection of type "ArcadeDB (server)".',
             { kind: 'unsupported' }
         );
     }
@@ -442,30 +443,41 @@ function createGraphClient(profile) {
  * o erro.
  */
 function describeTools(backend) {
-    const language = backend === BACKEND_NEO4J ? 'Cypher' : 'Cypher ou SQL';
+    // As descrições vão ao modelo: seguem o idioma do projeto (promptLanguage.js).
+    const language =
+        backend === BACKEND_NEO4J ? 'Cypher' : pick({ en: 'Cypher or SQL', pt: 'Cypher ou SQL' });
     return [
         {
             name: 'synesis_graph_query',
-            description:
-                `Executa uma consulta de LEITURA no grafo (${language}) e devolve os registros. ` +
-                'Use para toda pergunta sobre o corpus. Não há ferramenta de escrita.',
+            description: pick({
+                en: `Runs a READ query on the graph (${language}) and returns the records. ` +
+                    'Use it for every question about the corpus. There is no write tool.',
+                pt: `Executa uma consulta de LEITURA no grafo (${language}) e devolve os registros. ` +
+                    'Use para toda pergunta sobre o corpus. Não há ferramenta de escrita.'
+            }),
             inputSchema: {
                 type: 'object',
                 properties: {
-                    database: { type: 'string', description: 'Nome do banco.' },
+                    database: {
+                        type: 'string',
+                        description: pick({ en: 'Database name.', pt: 'Nome do banco.' })
+                    },
                     language: {
                         type: 'string',
                         enum: backend === BACKEND_NEO4J ? ['cypher'] : ['cypher', 'sql'],
-                        description: 'Linguagem da consulta.'
+                        description: pick({ en: 'Query language.', pt: 'Linguagem da consulta.' })
                     },
-                    query: { type: 'string', description: 'A consulta.' }
+                    query: { type: 'string', description: pick({ en: 'The query.', pt: 'A consulta.' }) }
                 },
                 required: ['database', 'query']
             }
         },
         {
             name: 'synesis_graph_get_schema',
-            description: 'Lista os rótulos de vértice e aresta do banco, com suas propriedades.',
+            description: pick({
+                en: 'Lists the vertex and edge labels of the database, with their properties.',
+                pt: 'Lista os rótulos de vértice e aresta do banco, com suas propriedades.'
+            }),
             inputSchema: {
                 type: 'object',
                 properties: { database: { type: 'string' } },
@@ -474,12 +486,18 @@ function describeTools(backend) {
         },
         {
             name: 'synesis_graph_list_databases',
-            description: 'Lista os bancos disponíveis no servidor configurado.',
+            description: pick({
+                en: 'Lists the databases available on the configured server.',
+                pt: 'Lista os bancos disponíveis no servidor configurado.'
+            }),
             inputSchema: { type: 'object', properties: {} }
         },
         {
             name: 'synesis_graph_server_status',
-            description: 'Estado do servidor de grafo configurado.',
+            description: pick({
+                en: 'Status of the configured graph server.',
+                pt: 'Estado do servidor de grafo configurado.'
+            }),
             inputSchema: { type: 'object', properties: {} }
         }
     ];
@@ -530,13 +548,19 @@ function requireArg(args, field, toolName) {
     const outros = Object.keys(args).filter(
         (k) => k !== field && args[k] !== undefined && args[k] !== null && String(args[k]).trim()
     );
+    // A mensagem volta ao MODELO como resultado da ferramenta: idioma do projeto.
+    const others = outros.map((k) => `\`${k}\``).join(', ');
     throw new GraphQueryError(
-        `A chamada de \`${toolName}\` veio ${presente ? 'com' : 'sem'} o parâmetro obrigatório ` +
-            `\`${field}\`${presente ? ', mas vazio' : ''}. ` +
-            (outros.length
-                ? `Os demais parâmetros vieram: ${outros.map((k) => `\`${k}\``).join(', ')}. `
-                : 'Nenhum outro parâmetro foi informado. ') +
-            `Repita a chamada preenchendo \`${field}\` com um valor de texto não vazio.`,
+        pick({
+            en: `The call to \`${toolName}\` came ${presente ? 'with' : 'without'} the required parameter ` +
+                `\`${field}\`${presente ? ', but empty' : ''}. ` +
+                (outros.length ? `The other parameters came: ${others}. ` : 'No other parameter was given. ') +
+                `Repeat the call filling \`${field}\` with a non-empty text value.`,
+            pt: `A chamada de \`${toolName}\` veio ${presente ? 'com' : 'sem'} o parâmetro obrigatório ` +
+                `\`${field}\`${presente ? ', mas vazio' : ''}. ` +
+                (outros.length ? `Os demais parâmetros vieram: ${others}. ` : 'Nenhum outro parâmetro foi informado. ') +
+                `Repita a chamada preenchendo \`${field}\` com um valor de texto não vazio.`
+        }),
         { kind: 'bad_arguments' }
     );
 }

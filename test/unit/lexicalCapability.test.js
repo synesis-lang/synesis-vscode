@@ -9,6 +9,7 @@
  */
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const {
     renderLexicalCapability,
     indexName,
@@ -24,6 +25,9 @@ const COM_INDICE = {
 };
 
 describe('Busca lexical — condicional', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('não instrui quando o grafo não declara índice', () => {
         // Grafo antigo, ou backend Neo4j — cuja sintaxe é
         // `db.index.fulltext.queryNodes`, não `SEARCH_INDEX`. Ensinar a forma
@@ -41,6 +45,9 @@ describe('Busca lexical — condicional', () => {
 });
 
 describe('Busca lexical — o índice é endereçado pelo nome exato', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('monta o identificador composto que SEARCH_INDEX espera', () => {
         // Um índice composto é nomeado pela lista inteira de campos. Sem isso o
         // modelo tentaria `SEARCH_INDEX('Chain', ...)` e a consulta falharia.
@@ -76,6 +83,9 @@ describe('Busca lexical — o índice é endereçado pelo nome exato', () => {
 });
 
 describe('Busca lexical — honestidade sobre o analyzer', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('anuncia dobra de acento quando o analyzer a faz', () => {
         const text = renderLexicalCapability(COM_INDICE);
         assert.match(text, /dobra acento e aplica stemming/i);

@@ -118,7 +118,7 @@ class GeminiModelProvider {
                 }
             } catch (error) {
                 console.warn(
-                    'Synesis Chat: catálogo Gemini indisponível, usando a lista fixa.',
+                    'Synesis Chat: Gemini catalog unavailable, using the fixed list.',
                     error && error.message
                 );
             }
@@ -138,7 +138,7 @@ class GeminiModelProvider {
     async provideLanguageModelChatResponse(model, messages, options, progress, token) {
         const apiKey = await this.getApiKey();
         if (!apiKey) {
-            throw new Error('Synesis Chat: configure a API key do Google Gemini (comando "Synesis: Configuração").');
+            throw new Error('Synesis Chat: set the Google Gemini API key (command "Synesis: Settings").');
         }
 
         const body = {

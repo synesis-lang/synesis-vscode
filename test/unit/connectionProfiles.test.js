@@ -219,7 +219,7 @@ describe('Conexão ativa e o que falta nela', () => {
     it('nomeia a lacuna em vez de dizer "não configurado"', () => {
         const profile = { name: 'face85', backend: BACKEND_ARCADEDB, uri: 'http://h:2480', user: 'u' };
         const gap = describeProfileGap(profile, false);
-        assert.ok(gap.includes('senha'));
+        assert.ok(gap.includes('password'));
         assert.ok(gap.includes('face85'), 'a mensagem precisa dizer QUAL conexão');
     });
 

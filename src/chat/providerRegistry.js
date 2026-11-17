@@ -53,7 +53,7 @@ const PROVIDERS = [
     {
         id: 'openrouter',
         vendor: 'synesis-openrouter',
-        label: 'OpenRouter (multi-modelo, inclui opções gratuitas)',
+        label: 'OpenRouter (multi-model, includes free options)',
         keyHint: 'sk-or-v1-...',
         validate: (v) => v.startsWith('sk-or-')
     },
@@ -61,15 +61,15 @@ const PROVIDERS = [
         // Sem chave: o que liga o provedor é o endereço do servidor.
         id: 'ollama',
         vendor: 'synesis-ollama',
-        label: 'Ollama (modelos locais)',
+        label: 'Ollama (local models)',
         keyless: true
     }
 ];
 
 const OPENROUTER_MODELS = [
     { id: 'google/gemini-3.7-flash', name: 'Gemini 3.7 Flash (OpenRouter)', maxInputTokens: 1000000, maxOutputTokens: 8192 },
-    { id: 'openai/gpt-oss-20b:free', name: 'GPT-OSS 20B — grátis (OpenRouter)', maxInputTokens: 131072, maxOutputTokens: 8192 },
-    { id: 'nvidia/nemotron-nano-9b-v2:free', name: 'Nemotron Nano 9B — grátis (OpenRouter)', maxInputTokens: 128000, maxOutputTokens: 8192 },
+    { id: 'openai/gpt-oss-20b:free', name: 'GPT-OSS 20B — free (OpenRouter)', maxInputTokens: 131072, maxOutputTokens: 8192 },
+    { id: 'nvidia/nemotron-nano-9b-v2:free', name: 'Nemotron Nano 9B — free (OpenRouter)', maxInputTokens: 128000, maxOutputTokens: 8192 },
     { id: 'anthropic/claude-haiku-4.5', name: 'Claude Haiku 4.5 (via OpenRouter)', maxInputTokens: 200000, maxOutputTokens: 8192 }
 ];
 

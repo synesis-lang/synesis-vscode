@@ -57,15 +57,15 @@ const BACKEND_NEO4J = 'neo4j';
 const BACKENDS = {
     [BACKEND_ARCADEDB]: {
         id: BACKEND_ARCADEDB,
-        label: 'ArcadeDB (servidor)',
-        hint: 'Servidor ArcadeDB local ou remoto, alcançado por HTTP.',
+        label: 'ArcadeDB (server)',
+        hint: 'Local or remote ArcadeDB server, reached over HTTP.',
         // O chat conversa pelo MCP que o próprio ArcadeDB serve — não é preciso
         // declarar servidor nenhum em `mcp.json`.
         transport: 'http',
         fields: [
             {
                 name: 'uri',
-                label: 'Endereço do servidor',
+                label: 'Server address',
                 placeholder: 'http://localhost:2480',
                 default: 'http://localhost:2480',
                 // A porta 2480 serve o Studio e a API HTTP. Um `bolt://` aqui é
@@ -74,39 +74,39 @@ const BACKENDS = {
                 validate: (v) =>
                     /^https?:\/\/.+/.test(v || '')
                         ? null
-                        : 'Informe uma URL http(s) — o ArcadeDB usa HTTP, não bolt://.'
+                        : 'Enter an http(s) URL — ArcadeDB uses HTTP, not bolt://.'
             },
             {
                 name: 'user',
-                label: 'Usuário',
+                label: 'User',
                 placeholder: 'root',
                 default: 'root',
-                hint: 'Prefira um usuário só de leitura: o chat não escreve no grafo.',
-                validate: (v) => (v && v.trim() ? null : 'Informe o usuário.')
+                hint: 'Prefer a read-only user: the chat never writes to the graph.',
+                validate: (v) => (v && v.trim() ? null : 'Enter the user.')
             },
             {
                 name: 'password',
-                label: 'Senha',
+                label: 'Password',
                 secret: true,
-                validate: (v) => (v ? null : 'Informe a senha.')
+                validate: (v) => (v ? null : 'Enter the password.')
             },
             {
                 name: 'database',
-                label: 'Banco',
-                hint: 'Deixe em branco para escolher na lista depois de testar a conexão.',
+                label: 'Database',
+                hint: 'Leave blank to choose from the list after testing the connection.',
                 optional: true
             }
         ]
     },
     [BACKEND_ARCADEDB_EMBEDDED]: {
         id: BACKEND_ARCADEDB_EMBEDDED,
-        label: 'ArcadeDB (embutido, sem servidor)',
-        hint: 'O banco é uma pasta no disco. Não exige servidor no ar nem Java instalado.',
+        label: 'ArcadeDB (embedded, no server)',
+        hint: 'The database is a folder on disk. It needs no running server and no Java installed.',
         transport: 'embedded',
         fields: [
             {
                 name: 'dbPath',
-                label: 'Pasta raiz do servidor',
+                label: 'Server root folder',
                 placeholder: 'D:\\ArcadeDB',
                 // ⚠️ Raiz do servidor, não a pasta do banco: o ArcadeDB procura
                 // os bancos em `<raiz>/databases/<nome>`. Apontar direto para a
@@ -114,13 +114,13 @@ const BACKENDS = {
                 // nada erra, e o corpus simplesmente não aparece. A regra é a
                 // mesma de `ArcadeDBEmbeddedConfig.database_dir` no
                 // synesis-graph; os dois lados têm de concordar.
-                hint: 'A pasta que CONTÉM `databases/` — não a pasta do banco em si.',
+                hint: 'The folder that CONTAINS `databases/` — not the database folder itself.',
                 validate: (v) => (v && v.trim() ? null : 'Informe a pasta raiz.')
             },
             {
                 name: 'database',
-                label: 'Banco',
-                hint: 'Nome da pasta sob `databases/`.',
+                label: 'Database',
+                hint: 'Name of the folder under `databases/`.',
                 optional: true
             }
         ]
@@ -128,36 +128,36 @@ const BACKENDS = {
     [BACKEND_NEO4J]: {
         id: BACKEND_NEO4J,
         label: 'Neo4j (local ou AuraDB)',
-        hint: 'Conexão Bolt. AuraDB usa `neo4j+s://`.',
+        hint: 'Bolt connection. AuraDB uses `neo4j+s://`.',
         transport: 'bolt',
         fields: [
             {
                 name: 'uri',
-                label: 'Endereço do servidor',
+                label: 'Server address',
                 placeholder: 'bolt://127.0.0.1:7687',
                 default: 'bolt://127.0.0.1:7687',
                 hint: 'AuraDB: `neo4j+s://<id>.databases.neo4j.io`',
                 validate: (v) =>
                     /^(bolt|neo4j)(\+s|\+ssc)?:\/\/.+/.test(v || '')
                         ? null
-                        : 'Informe uma URI bolt:// ou neo4j+s:// (AuraDB).'
+                        : 'Enter a bolt:// or neo4j+s:// (AuraDB) URI.'
             },
             {
                 name: 'user',
-                label: 'Usuário',
+                label: 'User',
                 placeholder: 'neo4j',
                 default: 'neo4j',
-                validate: (v) => (v && v.trim() ? null : 'Informe o usuário.')
+                validate: (v) => (v && v.trim() ? null : 'Enter the user.')
             },
             {
                 name: 'password',
-                label: 'Senha',
+                label: 'Password',
                 secret: true,
-                validate: (v) => (v ? null : 'Informe a senha.')
+                validate: (v) => (v ? null : 'Enter the password.')
             },
             {
                 name: 'database',
-                label: 'Banco',
+                label: 'Database',
                 placeholder: 'neo4j',
                 default: 'neo4j',
                 optional: true
@@ -327,11 +327,11 @@ async function readActiveConnection(context) {
  */
 function describeProfileGap(profile, hasPassword) {
     if (!profile) {
-        return 'Nenhuma conexão foi configurada ainda.';
+        return 'No connection has been configured yet.';
     }
     const spec = backendSpec(profile.backend);
     if (!spec) {
-        return `A conexão "${profile.name}" usa um tipo de banco desconhecido (${profile.backend}).`;
+        return `The connection "${profile.name}" uses an unknown database type (${profile.backend}).`;
     }
     for (const field of spec.fields) {
         if (field.optional) {
@@ -339,12 +339,12 @@ function describeProfileGap(profile, hasPassword) {
         }
         if (field.secret) {
             if (!hasPassword) {
-                return `Falta a senha da conexão "${profile.name}".`;
+                return `The password of the connection "${profile.name}" is missing.`;
             }
             continue;
         }
         if (!profile[field.name]) {
-            return `Falta "${field.label}" na conexão "${profile.name}".`;
+            return `"${field.label}" is missing in the connection "${profile.name}".`;
         }
     }
     return undefined;
@@ -354,11 +354,11 @@ function describeProfileGap(profile, hasPassword) {
 function validateProfile(profile, { password, hasStoredPassword = false } = {}) {
     const errors = {};
     if (!profile.name || !profile.name.trim()) {
-        errors.name = 'Dê um nome a esta conexão.';
+        errors.name = 'Give this connection a name.';
     }
     const spec = backendSpec(profile.backend);
     if (!spec) {
-        errors.backend = 'Escolha o tipo de banco.';
+        errors.backend = 'Choose the database type.';
         return errors;
     }
     for (const field of spec.fields) {
@@ -382,7 +382,7 @@ function validateProfile(profile, { password, hasStoredPassword = false } = {}) 
 /** Rótulo curto para a barra de status. */
 function formatProfileLabel(profile, database) {
     if (!profile) {
-        return '$(database) Sem conexão';
+        return '$(database) No connection';
     }
     const db = database || profile.database;
     return db ? `$(database) ${profile.name} · ${db}` : `$(database) ${profile.name}`;
@@ -410,7 +410,7 @@ async function migrateLegacyConnection(context, legacy) {
     const profile = await saveProfile(
         context,
         {
-            name: 'Conexão importada',
+            name: 'Imported connection',
             backend: BACKEND_ARCADEDB,
             uri: legacy.uri,
             user: legacy.user

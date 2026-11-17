@@ -1,3 +1,4 @@
+const { pick } = require('./promptLanguage');
 /**
  * databaseSelection.js - Escolha do banco ArcadeDB que o @synesis consulta.
  *
@@ -100,22 +101,31 @@ function setSelectedDatabase(context, database) {
  */
 function buildSystemPromptWithDatabase(basePrompt, database) {
     if (!database) {
+        // Vai ao modelo: segue o idioma do projeto (promptLanguage.js).
         return (
             `${basePrompt}\n\n` +
-            'Nenhum banco foi selecionado. Chame list_databases primeiro para descobrir ' +
-            'os bancos disponíveis, e nunca adivinhe um nome de banco.'
+            pick({
+                en: 'No database has been selected. Call list_databases first to discover ' +
+                    'the available databases, and never guess a database name.',
+                pt: 'Nenhum banco foi selecionado. Chame list_databases primeiro para descobrir ' +
+                    'os bancos disponíveis, e nunca adivinhe um nome de banco.'
+            })
         );
     }
     return (
         `${basePrompt}\n\n` +
-        `O banco selecionado para esta conversa é "${database}". Use-o em todas as ` +
-        'consultas, sem chamar list_databases nem perguntar ao usuário qual banco usar.'
+        pick({
+            en: `The database selected for this conversation is "${database}". Use it in every ` +
+                'query, without calling list_databases or asking the user which database to use.',
+            pt: `O banco selecionado para esta conversa é "${database}". Use-o em todas as ` +
+                'consultas, sem chamar list_databases nem perguntar ao usuário qual banco usar.'
+        })
     );
 }
 
 /** Rótulo da status bar. Curto de propósito: divide espaço com o item do LSP. */
 function formatStatusBarText(database) {
-    return database ? `$(database) ${database}` : '$(database) Sem banco';
+    return database ? `$(database) ${database}` : '$(database) No database';
 }
 
 function formatStatusBarTooltip(database) {
@@ -123,8 +133,8 @@ function formatStatusBarTooltip(database) {
     // distinção entre o corpus e o provedor de IA é o que o pesquisador precisa
     // ter clara — são duas configurações independentes.
     return database
-        ? `Synesis: o chat @synesis consulta o banco de grafos "${database}". Clique para trocar.`
-        : 'Synesis: nenhum banco de grafos selecionado. Clique para escolher.';
+        ? `Synesis: the @synesis chat queries the graph database "${database}". Click to change.`
+        : 'Synesis: no graph database selected. Click to choose one.';
 }
 
 /**
@@ -158,7 +168,7 @@ async function selectDatabaseCommand(context, onChanged) {
     try {
         await vscode.commands.executeCommand('workbench.mcp.startServer', '*', { waitForLiveTools: true });
     } catch (error) {
-        console.warn('Synesis Chat: falha ao iniciar servidores MCP', error);
+        console.warn('Synesis Chat: failed to start MCP servers', error);
     }
 
     // Casa pelo sufixo, não por igualdade: o VSCode mangla o nome de
@@ -194,7 +204,7 @@ async function selectDatabaseCommand(context, onChanged) {
         const result = await vscode.lm.invokeTool(listTool.name, { input: {} });
         databases = parseDatabaseNames(result);
     } catch (error) {
-        vscode.window.showErrorMessage(`Synesis: falha ao listar bancos — ${error.message || error}`);
+        vscode.window.showErrorMessage(`Synesis: failed to list databases — ${error.message || error}`);
         return undefined;
     }
 
@@ -204,7 +214,7 @@ async function selectDatabaseCommand(context, onChanged) {
 /** A escolha em si, comum aos dois caminhos. */
 async function pickAndStore(context, databases, onChanged) {
     if (!databases || databases.length === 0) {
-        vscode.window.showWarningMessage('Synesis: o servidor não devolveu nenhum banco de grafos.');
+        vscode.window.showWarningMessage('Synesis: the server returned no graph database.');
         return undefined;
     }
 
@@ -212,9 +222,9 @@ async function pickAndStore(context, databases, onChanged) {
     const picked = await vscode.window.showQuickPick(
         databases.map((name) => ({
             label: name,
-            description: name === current ? '(atual)' : undefined
+            description: name === current ? '(current)' : undefined
         })),
-        { placeHolder: 'Qual banco de grafos o @synesis deve consultar?' }
+        { placeHolder: 'Which graph database should @synesis query?' }
     );
 
     if (!picked) {

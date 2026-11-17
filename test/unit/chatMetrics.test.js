@@ -256,11 +256,11 @@ describe('Métricas — relatório', () => {
     it('traz os números com o que cada um significa', () => {
         const text = renderReport('teste', summary);
 
-        assert.match(text, /Rodadas de modelo \(média\)/);
-        assert.match(text, /Precisão literal/);
+        assert.match(text, /Model rounds \(mean\)/);
+        assert.match(text, /Literal precision/);
         // Separa o que o modelo pediu do que a extensão leu por conta própria:
         // o prefetch custa consulta real e ficava fora de qualquer contabilidade.
-        assert.match(text, /Consultas da extensão/);
+        assert.match(text, /Extension queries/);
     });
 
     it('registra as condições da medição', () => {
@@ -272,7 +272,7 @@ describe('Métricas — relatório', () => {
             databases: ['face85']
         });
 
-        assert.match(text, /Condições da medição/);
+        assert.match(text, /Measurement conditions/);
         assert.match(text, /Claude Opus/);
         assert.match(text, /face85/);
     });
@@ -285,23 +285,23 @@ describe('Métricas — relatório', () => {
             databases: ['face85']
         });
 
-        assert.match(text, /misturou modelos/i);
-        assert.match(text, /não são comparáveis/i);
+        assert.match(text, /mixed models/i);
+        assert.match(text, /not comparable/i);
     });
 
     it('declara que não usa juiz LLM', () => {
         // É a propriedade que torna a métrica defensável; deixá-la implícita
         // convidaria a confundi-la com um faithfulness score.
-        assert.match(renderReport('teste', summary), /Nenhuma destas métricas usa juiz LLM/);
+        assert.match(renderReport('teste', summary), /None of these metrics uses an LLM judge/);
     });
 
     it('avisa para comparar, não ler em absoluto', () => {
-        assert.match(renderReport('teste', summary), /Compare, não leia em absoluto/);
+        assert.match(renderReport('teste', summary), /Compare, do not read in absolute terms/);
     });
 
     it('ressalva que não mede utilidade', () => {
         // Sem isto, uma precisão alta seria lida como "boa resposta".
-        assert.match(renderReport('teste', summary), /nada\s+disto mede se a resposta é/is);
+        assert.match(renderReport('teste', summary), /none\s+of this measures whether the answer is/is);
     });
 
     it('declara que precisão literal não é entailment', () => {
@@ -309,14 +309,14 @@ describe('Métricas — relatório', () => {
         // afirmação que o acompanha.
         const text = renderReport('teste', summary);
 
-        assert.match(text, /não que ele sustenta a afirmação/i);
-        assert.match(text, /sem citação alguma são invisíveis/i);
+        assert.match(text, /not that it supports the claim/i);
+        assert.match(text, /no quotation at all are invisible/i);
     });
 
     it('avisa que as armadilhas são genéricas', () => {
         // Um corpus que trate legitimamente de política monetária responderia às
         // armadilhas com razão, e a métrica o puniria por isso.
-        assert.match(renderReport('teste', summary), /perguntas-armadilha abaixo são genéricas/i);
+        assert.match(renderReport('teste', summary), /trap questions are generic/i);
     });
 
     it('inclui a linha de abstenção quando há armadilhas', () => {
@@ -326,11 +326,11 @@ describe('Métricas — relatório', () => {
         ]);
         const text = renderReport('teste', summary, traps);
 
-        assert.match(text, /Abstenção \| 1\/2/);
+        assert.match(text, /Abstention \| 1\/2/);
     });
 
     it('omite a abstenção quando não houve armadilha', () => {
-        assert.ok(!/Abstenção/.test(renderReport('teste', summary)));
+        assert.ok(!/Abstention/.test(renderReport('teste', summary)));
     });
 });
 

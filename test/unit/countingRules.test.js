@@ -14,6 +14,7 @@
  */
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const { SYSTEM_PROMPT, COUNTING_RULES } = require('../../src/chat/chatParticipant');
 const { buildAuditPrompt } = require('../../src/chat/auditTrail');
 
@@ -77,6 +78,9 @@ describe('Contagem — auto-verificação antes de responder', () => {
 });
 
 describe('Contagem — integração', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('as regras entram no SYSTEM_PROMPT', () => {
         assert.ok(SYSTEM_PROMPT.includes(COUNTING_RULES));
     });
@@ -152,6 +156,9 @@ describe('Contagem — regra de divergência', () => {
 });
 
 describe('Reavaliação — carrega as consultas originais', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     const { buildAuditPrompt, traceQueries } = require('../../src/chat/auditTrail');
 
     const TRACE = {

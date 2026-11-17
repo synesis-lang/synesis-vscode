@@ -2,7 +2,7 @@
   "name": "synesis",
   "displayName": "Synesis",
   "description": "Knowledge Engineering in VS Code: Official LSP client for Synesis.",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "publisher": "synesis-lang",
   "author": "Christian Maciel De Britto",
   "license": "MIT",
@@ -164,23 +164,23 @@
     "commands": [
       {
         "command": "synesis.chat.selectDatabase",
-        "title": "Synesis: Selecionar Banco de Grafos do Chat"
+        "title": "Synesis: Select Chat Graph Database"
       },
       {
         "command": "synesis.chat.auditTrail",
-        "title": "Synesis: Ver Evidências e Consultas do Turno"
+        "title": "Synesis: Show Turn Evidence and Queries"
       },
       {
         "command": "synesis.chat.reassess",
-        "title": "Synesis: Reavaliar Resposta (nova execução)"
+        "title": "Synesis: Reassess Answer (new run)"
       },
       {
         "command": "synesis.chat.showMetrics",
-        "title": "Synesis: Métricas do Chat (comparar modelos)"
+        "title": "Synesis: Chat Metrics (compare models)"
       },
       {
         "command": "synesis.openSettings",
-        "title": "Synesis: Configuração",
+        "title": "Synesis: Settings",
         "icon": "$(gear)"
       },
       {
@@ -322,6 +322,11 @@
       {
         "command": "synesis.coder.codeSelection",
         "title": "Synesis: Code Selection"
+      },
+      {
+        "command": "synesis.ontology.subtreeEvidence",
+        "title": "Subtree Evidence",
+        "icon": "$(list-tree)"
       }
     ],
     "keybindings": [
@@ -515,6 +520,11 @@
           "command": "synesis.reference.rename",
           "when": "view == synesisReferenceExplorer && viewItem == reference",
           "group": "7_modification"
+        },
+        {
+          "command": "synesis.ontology.subtreeEvidence",
+          "when": "view == synesisOntologyTopicsExplorer && viewItem == ontologyConcept",
+          "group": "navigation"
         }
       ]
     },
@@ -531,20 +541,20 @@
           "synesisExplorer.chat.credentials": {
             "type": "null",
             "default": null,
-            "markdownDescription": "### [⚙️ Abrir a página de configuração do Synesis](command:synesis.openSettings)\n\nÉ lá que ficam **todas** as credenciais do chat `@synesis`, em campos normais — inclusive senhas e chaves de API, que não podem aparecer aqui.\n\nO chat combina **duas coisas independentes**:\n\n- 🗄️ **Banco de grafos** — onde o *seu corpus* está (ArcadeDB ou Neo4j). É de lá que saem os trechos e referências que sustentam cada resposta.\n- 🤖 **Provedor de IA** — qual modelo *lê e redige* (Anthropic, OpenAI, Gemini, OpenRouter). Não guarda o seu corpus: sem uma conexão de grafo, o chat se recusa a responder sobre os dados.\n\n**Por que as senhas não aparecem aqui:** esta página grava em `settings.json`, que é texto puro, sincroniza entre máquinas e é legível por outras extensões. O VSCode não oferece campo de senha — por isso o Synesis tem página própria, gravando no cofre criptografado do sistema operacional.",
+            "markdownDescription": "### [⚙️ Open the Synesis settings page](command:synesis.openSettings)\n\nThat is where **all** the credentials of the `@synesis` chat live, in ordinary fields — including passwords and API keys, which cannot appear here.\n\nThe chat combines **two independent things**:\n\n- 🗄️ **Graph database** — where *your corpus* is (ArcadeDB or Neo4j). That is where the excerpts and references supporting each answer come from.\n- 🤖 **AI provider** — which model *reads and writes* (Anthropic, OpenAI, Gemini, OpenRouter). It does not hold your corpus: without a graph connection, the chat refuses to answer about the data.\n\n**Why passwords do not appear here:** this page writes to `settings.json`, which is plain text, syncs across machines and is readable by other extensions. VSCode offers no password field — that is why Synesis has its own page, writing to the operating system's encrypted vault.",
             "scope": "application"
           },
           "synesisExplorer.chat.showMetricsButton": {
             "type": "boolean",
             "default": false,
-            "markdownDescription": "Oferece o botão **Métricas da sessão** ao fim das respostas.\n\nDesligado por padrão: as métricas são **diagnóstico exploratório**, não um veredito sobre qual modelo é mais confiável. A precisão literal verifica que o trecho existe no banco, não que ele sustenta a afirmação; as perguntas-armadilha são genéricas e um corpus que trate legitimamente desses temas seria penalizado; e uma sessão pode misturar modelos e bancos. O comando continua disponível na paleta."
+            "markdownDescription": "Offers the **Session metrics** button at the end of answers.\n\nOff by default: the metrics are **exploratory diagnostics**, not a verdict on which model is more reliable. Literal precision checks that the excerpt exists in the database, not that it supports the claim; the trap questions are generic, and a corpus that legitimately covers those topics would be penalised; and a session can mix models and databases. The command remains available in the palette."
           },
           "synesisExplorer.chat.maxToolRounds": {
             "type": "integer",
             "default": 16,
             "minimum": 4,
             "maximum": 40,
-            "markdownDescription": "Quantas consultas ao banco o assistente pode encadear numa resposta.\n\nO limite existe para conter um modelo que entrou em laço, não para economizar chamadas: perguntas que atravessam conceito → trecho → referência gastam várias consultas antes da útil. Abaixo de 8 as respostas ficam incompletas.",
+            "markdownDescription": "How many database queries the assistant can chain in one answer.\n\nThe limit exists to contain a model stuck in a loop, not to save calls: questions that go concept → excerpt → reference spend several queries before the useful one. Below 8 the answers come out incomplete.",
             "scope": "application"
           },
           "synesisExplorer.chat.openRouterModels": {
@@ -553,25 +563,25 @@
               "type": "string"
             },
             "default": [],
-            "markdownDescription": "Modelos do OpenRouter a oferecer no seletor de chat, por id (ex.: `liquid/lfm-2.5-2.6b:free`).\n\nO OpenRouter publica centenas de modelos; em vez de listá-los todos, declare aqui os que quer testar. Nome, janela de contexto e suporte a *tool-calling* sao lidos do catalogo publico do OpenRouter — nao e preciso informa-los.\n\nOs modelos declarados aqui SUBSTITUEM a lista padrao do provedor."
+            "markdownDescription": "OpenRouter models to offer in the chat picker, by id (e.g. `liquid/lfm-2.5-2.6b:free`).\n\nOpenRouter publishes hundreds of models; instead of listing them all, declare here the ones you want to test. Name, context window and *tool-calling* support are read from the public OpenRouter catalog — there is no need to enter them.\n\nThe models declared here REPLACE the provider's default list."
           },
           "synesisExplorer.chat.discoverModels": {
             "type": "boolean",
             "default": true,
-            "markdownDescription": "Descobrir os modelos disponiveis consultando cada provedor (Anthropic, OpenAI, Gemini), em vez de usar a lista fixa da extensao.\n\nDesligue para manter o seletor estavel durante uma campanha de medicao, ou quando a rede/proxy bloquear as consultas de catalogo. Com a descoberta desligada, valem as listas internas."
+            "markdownDescription": "Discover the available models by querying each provider (Anthropic, OpenAI, Gemini), instead of using the extension's fixed list.\n\nTurn it off to keep the picker stable during a measurement campaign, or when the network/proxy blocks the catalog queries. With discovery off, the internal lists apply."
           },
           "synesisExplorer.chat.ollama.url": {
             "type": "string",
             "default": "",
             "scope": "machine",
-            "markdownDescription": "Endereço do servidor Ollama para usar modelos locais no chat (ex.: `http://localhost:11434`, ou o endereço de um servidor da rede). Em branco, o provedor fica desligado.\n\nNão exige API key: os modelos instalados no servidor aparecem no seletor de chat, com suporte a *tool-calling* lido do próprio Ollama.\n\nEscopo `machine` por segurança: um workspace não confiável não pode redirecionar o chat — e os trechos do seu corpus que vão no prompt — para outro servidor."
+            "markdownDescription": "Address of the Ollama server for using local models in the chat (e.g. `http://localhost:11434`, or the address of a server on the network). Blank turns the provider off.\n\nNo API key needed: the models installed on the server show up in the chat picker, with *tool-calling* support read from Ollama itself.\n\n`machine` scope for safety: an untrusted workspace cannot redirect the chat — and the excerpts of your corpus that go into the prompt — to another server."
           },
           "synesisExplorer.chat.ollama.contextLength": {
             "type": "integer",
             "default": 32768,
             "minimum": 2048,
             "scope": "machine",
-            "markdownDescription": "Janela de contexto (tokens) pedida ao Ollama em cada conversa — `num_ctx`. Vale o menor entre este valor e o máximo do modelo.\n\nO Ollama só aloca o que for pedido, e sem pedido usa um padrão pequeno que corta o prompt em silêncio. Valores maiores exigem mais memória de GPU; reduza se o servidor ficar sem VRAM."
+            "markdownDescription": "Context window (tokens) requested from Ollama in each conversation — `num_ctx`. The smaller of this value and the model maximum applies.\n\nOllama only allocates what is requested, and without a request it uses a small default that silently cuts the prompt. Larger values need more GPU memory; reduce it if the server runs out of VRAM."
           },
           "synesisExplorer.chat.ollama.think": {
             "type": "string",
@@ -583,35 +593,35 @@
               "high"
             ],
             "enumDescriptions": [
-              "Não envia o parâmetro: vale o padrão do modelo.",
-              "Desliga o raciocínio (no gpt-oss, que não desliga, vira \"low\").",
-              "Raciocínio baixo — níveis valem no gpt-oss; nos demais, liga.",
-              "Raciocínio médio — níveis valem no gpt-oss; nos demais, liga.",
-              "Raciocínio alto — níveis valem no gpt-oss; nos demais, liga."
+              "Does not send the parameter: the model default applies.",
+              "Turns reasoning off (on gpt-oss, which cannot turn it off, it becomes \"low\").",
+              "Low reasoning — levels apply to gpt-oss; on the others, it turns reasoning on.",
+              "Medium reasoning — levels apply to gpt-oss; on the others, it turns reasoning on.",
+              "High reasoning — levels apply to gpt-oss; on the others, it turns reasoning on."
             ],
             "default": "low",
             "scope": "machine",
-            "markdownDescription": "Raciocínio pedido aos modelos do Ollama que pensam — parâmetro `think`.\n\nNo chat o modelo pensa a cada consulta ao banco, inclusive nas que só escolhem a próxima: é o maior custo de tempo num modelo local. Modelos que não declaram raciocínio não recebem o parâmetro."
+            "markdownDescription": "Reasoning requested from the Ollama models that think — the `think` parameter.\n\nIn the chat the model thinks at every database query, including those that only pick the next one: it is the largest time cost in a local model. Models that do not declare reasoning do not receive the parameter."
           },
           "synesisExplorer.chat.ollama.stream": {
             "type": "boolean",
             "default": true,
             "scope": "machine",
-            "markdownDescription": "Receber a resposta do Ollama em pedaços (streaming), à medida que é gerada.\n\nNão encurta a geração. Evita que uma rodada longa estoure o prazo de 5 minutos do `fetch` do Node à espera dos cabeçalhos — o que acontece com modelo local lento sem streaming — e deixa o cancelamento agir no meio da geração. O chat ainda mostra o texto ao fim de cada rodada: ele o retém até saber que não é um passo intermediário antes de uma consulta ao banco."
+            "markdownDescription": "Receive the Ollama answer in chunks (streaming), as it is generated.\n\nIt does not shorten generation. It keeps a long round from hitting the 5-minute timeout of Node's `fetch` while waiting for headers — which happens with a slow local model without streaming — and lets cancellation act midway. The chat still shows the text at the end of each round: it holds it until it knows it is not an intermediate step before a database query."
           },
           "synesisExplorer.chat.arcadedb.uri": {
             "type": "string",
             "default": "http://localhost:2480",
             "scope": "machine",
-            "markdownDescription": "**Legado — só para migração.** Endpoint do ArcadeDB da versão anterior, importado como perfil de conexão. Configure conexões na [página de configuração](command:synesis.openSettings).\n\nContinua declarada, com escopo `machine`, por segurança: sem a declaração, um workspace não confiável poderia gravar este valor no próprio `settings.json` e redirecionar a conexão — com a senha guardada no cofre — para outro host.",
-            "deprecationMessage": "Legado: configure conexões na página de configuração do Synesis."
+            "markdownDescription": "**Legacy — migration only.** ArcadeDB endpoint from the previous version, imported as a connection profile. Configure connections on the [settings page](command:synesis.openSettings).\n\nIt remains declared, with `machine` scope, for safety: without the declaration, an untrusted workspace could write this value into its own `settings.json` and redirect the connection — with the password stored in the vault — to another host.",
+            "deprecationMessage": "Legacy: configure connections on the Synesis settings page."
           },
           "synesisExplorer.chat.arcadedb.user": {
             "type": "string",
             "default": "root",
             "scope": "machine",
-            "markdownDescription": "**Legado — só para migração.** Usuário do ArcadeDB da versão anterior, importado como perfil de conexão. Configure conexões na [página de configuração](command:synesis.openSettings).",
-            "deprecationMessage": "Legado: configure conexões na página de configuração do Synesis."
+            "markdownDescription": "**Legacy — migration only.** ArcadeDB user from the previous version, imported as a connection profile. Configure connections on the [settings page](command:synesis.openSettings).",
+            "deprecationMessage": "Legacy: configure connections on the Synesis settings page."
           }
         }
       },
@@ -690,7 +700,7 @@
         "id": "synesis.chatAssistant",
         "name": "synesis",
         "fullName": "Synesis Assistant",
-        "description": "Consulta o grafo Synesis (ArcadeDB) via MCP.",
+        "description": "Queries the Synesis graph (ArcadeDB, Neo4j).",
         "isSticky": true
       }
     ],

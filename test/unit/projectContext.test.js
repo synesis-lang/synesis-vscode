@@ -21,6 +21,7 @@
 require('../helpers/vscodeMock').install();
 
 const assert = require('assert');
+const { setPromptLanguage, withPromptLanguage } = require('../../src/chat/promptLanguage');
 const {
     questionNeedsTemplateSemantics,
     renderProjectContext,
@@ -109,6 +110,9 @@ describe('ProjectContext — quando carregar a semântica do template', () => {
 });
 
 describe('ProjectContext — montagem do prompt', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('inclui a descrição do projeto e o resumo', () => {
         const out = renderProjectContext({
             description: 'Mapeamento semântico da produção científica.',
@@ -140,6 +144,9 @@ describe('ProjectContext — montagem do prompt', () => {
 });
 
 describe('ProjectContext — aviso de snapshot velho', () => {
+    // Este bloco confere o texto do prompt em português (projeto pt).
+    before(() => setPromptLanguage('pt'));
+    after(() => setPromptLanguage('en'));
     it('não avisa para grafo recente', () => {
         assert.strictEqual(describeStaleness(new Date().toISOString()), undefined);
     });
@@ -351,7 +358,7 @@ describe('Saudação — apresenta o projeto em vez de exemplos genéricos', () 
     it('sem banco selecionado, diz o que fazer e oferece o comando', async () => {
         const f = fakeStream();
         const sug = await renderWelcome(f.stream, [], undefined, {});
-        assert.ok(f.text().includes('Selecionar Banco'));
+        assert.ok(f.text().includes('Select Chat Graph Database'));
         assert.deepStrictEqual(f.buttons, ['synesis.chat.selectDatabase']);
         assert.deepStrictEqual(sug, []);
     });
@@ -370,7 +377,7 @@ describe('Saudação — apresenta o projeto em vez de exemplos genéricos', () 
         const velho = new Date(Date.now() - 200 * 86400000).toISOString();
         const tools = fakeGraph({ context: { ...CONTEXT, generatedAt: velho } });
         await renderWelcome(f.stream, tools, 'face85', {});
-        assert.ok(f.text().includes('200 dias'));
+        assert.ok(f.text().includes('200 days'));
     });
 });
 
@@ -392,7 +399,7 @@ describe('Diagnóstico — distinguir falta de contexto de falta de permissão',
         // Aponta o COMANDO, não o arquivo: desde a Fase 4.6 a credencial é
         // configurada na extensão e a senha vive em `context.secrets`, então
         // mandar editar o `mcp.json` à mão seria orientação errada.
-        assert.ok(msg.includes('Configurar Conexão do Banco'), 'deve apontar o comando');
+        assert.ok(msg.includes('Synesis: Settings'), 'deve apontar o comando');
         assert.ok(!/re-?export/i.test(msg), 'NÃO deve mandar re-exportar: não resolve permissão');
     });
 
@@ -401,8 +408,8 @@ describe('Diagnóstico — distinguir falta de contexto de falta de permissão',
             "Database 'x' does not exist. Available databases: [face85].",
             'x'
         );
-        assert.ok(msg.includes('não existe'));
-        assert.ok(msg.includes('Selecionar Banco'));
+        assert.ok(msg.includes('does not exist'));
+        assert.ok(msg.includes('Select Chat Graph Database'));
     });
 
     it('não confunde resposta legítima com erro', () => {
